@@ -7,8 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"*.{ts,tsx,css,html,json}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"*.{ts,tsx,css,html,json}\"",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"backend/**/*.{js,json,md}\" \"*.{ts,tsx,css,html,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"backend/**/*.{js,json,md}\" \"*.{ts,tsx,css,html,json}\"",
     "preview": "vite preview"
   },
   "dependencies": {
