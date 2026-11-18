@@ -121,6 +121,7 @@ const DEFAULT_SPECIALTIES = [
 	'Endodoncia',
 	'Periodoncia',
 	'Odontopediatría',
+	'Rehabilitación oral',
 ]
 const DEFAULT_DENTISTS: Dentist[] = [
 	{
@@ -229,7 +230,12 @@ function loadData(): StoredData {
 							}))
 						: [],
 					dentists: Array.isArray(data.dentists) ? data.dentists : DEFAULT_DENTISTS,
-					specialties: Array.isArray(data.specialties) ? data.specialties : DEFAULT_SPECIALTIES,
+					specialties: [
+						...new Set([
+							...DEFAULT_SPECIALTIES,
+							...(Array.isArray(data.specialties) ? data.specialties : []),
+						]),
+					],
 					appointments: data.appointments.map((appointment, index) => {
 						const durationMinutes =
 							appointment.durationMinutes ?? getServiceDuration(services, appointment.service)
