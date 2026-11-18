@@ -17,19 +17,20 @@ If you are developing a production application, we recommend enabling type-aware
 
 ```json
 {
-	"$schema": "./node_modules/oxlint/configuration_schema.json",
-	"plugins": ["react", "typescript", "oxc"],
-	"options": {
-		"typeAware": true
-	},
-	"rules": {
-		"react/rules-of-hooks": "error",
-		"react/only-export-components": ["warn", { "allowConstantExport": true }]
-	}
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "oxc"],
+  "options": {
+    "typeAware": true
+  },
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/only-export-components": ["warn", { "allowConstantExport": true }]
+  }
 }
 ```
 
 See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+
 
 ## Requisitos incorporados para la entrega
 
@@ -49,49 +50,25 @@ See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rule
 - Se conserva el almacenamiento local del navegador y se adapta la lectura de datos anteriores.
 
 ### Acceso inicial de administración
-
 - Correo: `admin@miradent.com`
 - Contraseña: `admin123`
 
 ### Ejecución
-
 ```bash
 npm install
 npm run dev
 ```
 
 Para comprobar la compilación:
-
 ```bash
 npm run build
 ```
 
-### Base de datos MySQL
-
-En `database/schema.sql` está el esquema inicial de MySQL con comandos básicos: `CREATE DATABASE`, `USE`, `CREATE TABLE` e `INSERT`. Incluye usuarios y roles, odontólogos y especialidades, servicios, horario de la clínica, cierres, disponibilidad, las dos sillas, citas y notificaciones.
-
-Para ejecutarlo en un servidor MySQL 8.0.16 o posterior:
-
-```bash
-mysql -u TU_USUARIO -p < database/schema.sql
-```
-
-En `horario_clinica`, los días son números del 1 (lunes) al 5 (viernes). El horario está dividido en mañana y tarde para dejar libre el almuerzo. Las duraciones de los servicios son valores de ejemplo; Endodoncia está configurada en 90 minutos.
-
-**Importante:** esta es una base para comenzar a practicar, no una versión lista para producción. El script no incluye automatizaciones avanzadas para evitar dos reservas simultáneas. La interfaz actual todavía guarda y consulta los datos en `localStorage`; conectarla con MySQL requiere un backend. Guarda las contraseñas como hash desde el backend, nunca como texto normal.
-
-### Backend Node.js
-
-El backend de tres capas está en `backend/`: rutas y controladores, reglas de negocio y acceso a datos MySQL. Incluye autenticación, consulta de catálogos y reserva transaccional; si falla una reserva, ejecuta `ROLLBACK`. Consulta [backend/README.md](./backend/README.md) para configurarlo y probar sus rutas.
-
-El backend se puede probar por separado. La interfaz React todavía no está conectada a él y continúa usando `localStorage`.
-
-**Nota académica:** la aplicación React sigue utilizando `localStorage`; aún no consume el backend Node.js ni la base de datos MySQL. Debes configurar y probar el backend y conectar la interfaz para compartir las citas entre dispositivos.
+**Nota académica:** la aplicación sigue utilizando `localStorage` como almacenamiento del navegador; no equivale todavía a una base de datos centralizada con backend y los cambios no se comparten entre dispositivos. Las validaciones del navegador son para demostración y no protegen contra reservas simultáneas en diferentes dispositivos. Para producción, se requiere implementar y conectar un backend.
 
 Los odontólogos A y K son registros de referencia y deben reemplazarse por los nombres reales. La disponibilidad mensual se guarda como turnos fechados y debe publicarse por cada odontólogo y especialidad desde Administración > Horarios.
 
 Las duraciones de ejemplo de los servicios —excepto Endodoncia, configurada en 90 minutos según el requisito— son provisionales y deben verificarse con la clínica.
 
 ### Benchmarking
-
 En `docs/benchmarking.md` queda organizada la lista de referencias escrita en los apuntes y una matriz para comparar disponibilidad, selección del profesional, reserva, confirmación y administración. Las observaciones específicas de cada plataforma deben completarse después de revisarlas.
