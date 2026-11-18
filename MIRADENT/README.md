@@ -66,7 +66,7 @@ npm run build
 
 ### Base de datos MySQL
 
-En `database/schema.sql` está el esquema inicial de MySQL: usuarios y roles, odontólogos y especialidades, servicios, horario de la clínica, cierres, disponibilidad, las dos sillas, citas y notificaciones. Incluye datos iniciales para el catálogo de MIRADENT y el procedimiento `book_appointment`, que valida los cruces dentro de una transacción.
+En `database/schema.sql` está el esquema inicial de MySQL con comandos básicos: `CREATE DATABASE`, `USE`, `CREATE TABLE` e `INSERT`. Incluye usuarios y roles, odontólogos y especialidades, servicios, horario de la clínica, cierres, disponibilidad, las dos sillas, citas y notificaciones.
 
 Para ejecutarlo en un servidor MySQL 8.0.16 o posterior:
 
@@ -74,9 +74,9 @@ Para ejecutarlo en un servidor MySQL 8.0.16 o posterior:
 mysql -u TU_USUARIO -p < database/schema.sql
 ```
 
-Configura la zona horaria de la conexión de la aplicación como `America/Bogota`. Crea las cuentas administrativas desde un backend seguro y almacena contraseñas usando un algoritmo de hash; no insertes contraseñas en texto plano.
+En `horario_clinica`, los días son números del 1 (lunes) al 5 (viernes). El horario está dividido en mañana y tarde para dejar libre el almuerzo. Las duraciones de los servicios son valores de ejemplo; Endodoncia está configurada en 90 minutos.
 
-**Importante:** la interfaz actual todavía guarda y consulta datos en `localStorage`; no está conectada a MySQL. Para usar esta base de datos desde la aplicación hace falta implementar un backend y darle acceso de escritura a las citas únicamente mediante `book_appointment`.
+**Importante:** esta es una base para comenzar a practicar, no una versión lista para producción. El script no incluye automatizaciones avanzadas para evitar dos reservas simultáneas. La interfaz actual todavía guarda y consulta los datos en `localStorage`; conectarla con MySQL requiere un backend. Guarda las contraseñas como hash desde el backend, nunca como texto normal.
 
 **Nota académica:** la aplicación sigue utilizando `localStorage` como almacenamiento del navegador; no equivale todavía a una base de datos centralizada con backend y los cambios no se comparten entre dispositivos. Las validaciones del navegador son para demostración y no protegen contra reservas simultáneas en diferentes dispositivos. Para producción, se requiere implementar y conectar un backend.
 
