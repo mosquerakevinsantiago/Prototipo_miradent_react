@@ -147,6 +147,17 @@ const DEFAULT_SERVICES: Service[] = [
 	{ name: 'Consulta de urgencia', durationMinutes: 30, specialty: 'Odontología general' },
 	{ name: 'Otro tratamiento', durationMinutes: 30, specialty: 'Odontología general' },
 	{ name: 'Endodoncia', durationMinutes: 90, specialty: 'Endodoncia' },
+	{ name: 'Extracción simple', durationMinutes: 30, specialty: 'Odontología general' },
+	{ name: 'Blanqueamiento dental', durationMinutes: 30, specialty: 'Odontología general' },
+	{ name: 'Resina compuesta', durationMinutes: 30, specialty: 'Odontología general' },
+	{ name: 'Consulta de valoración', durationMinutes: 30, specialty: 'Odontología general' },
+	{ name: 'Aplicación de flúor', durationMinutes: 30, specialty: 'Odontología general' },
+	{ name: 'Sellantes dentales', durationMinutes: 30, specialty: 'Odontología general' },
+	{ name: 'Control de ortodoncia', durationMinutes: 30, specialty: 'Ortodoncia' },
+	{ name: 'Radiografía periapical', durationMinutes: 30, specialty: 'Odontología general' },
+	{ name: 'Profilaxis avanzada', durationMinutes: 30, specialty: 'Odontología general' },
+	{ name: 'Sellado de restauración', durationMinutes: 30, specialty: 'Odontología general' },
+	{ name: 'Retiro de brackets', durationMinutes: 30, specialty: 'Ortodoncia' },
 ]
 const CHAIRS = ['chair-1', 'chair-2']
 
@@ -208,7 +219,7 @@ function loadData(): StoredData {
 				if (!data.accounts.some((account) => account.role === 'admin')) {
 					data.accounts.push(ADMIN_ACCOUNT)
 				}
-				const services = Array.isArray(data.services)
+				const savedServices = Array.isArray(data.services)
 					? data.services.map((service) =>
 							typeof service === 'string'
 								? (DEFAULT_SERVICES.find((defaultService) => defaultService.name === service) ?? {
@@ -218,7 +229,12 @@ function loadData(): StoredData {
 									})
 								: { ...service, specialty: service.specialty ?? DEFAULT_SPECIALTIES[0] },
 						)
-					: DEFAULT_SERVICES
+					: []
+				const savedServiceNames = new Set(savedServices.map((service) => service.name))
+				const services = [
+					...savedServices,
+					...DEFAULT_SERVICES.filter((service) => !savedServiceNames.has(service.name)),
+				]
 				return {
 					accounts: data.accounts,
 					currentUserId: typeof data.currentUserId === 'string' ? data.currentUserId : null,
