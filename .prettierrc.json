@@ -1,0 +1,16 @@
+{
+  "printWidth": 100,
+  "singleQuote": true,
+  "semi": false,
+  "trailingComma": "all",
+  "useTabs": true,
+  "overrides": [
+    {
+      "files": ["*.css", "*.json", "*.html"],
+      "options": {
+        "tabWidth": 2,
+        "useTabs": false
+      }
+    }
+  ]
+}
