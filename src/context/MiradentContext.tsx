@@ -63,6 +63,7 @@ type StoredData = {
 	accounts: Account[]
 	appointments: Appointment[]
 	currentUserId: string | null
+	serviceCatalogVersion: number
 	services: Service[]
 	availability: AvailabilitySlot[]
 	dentists: Dentist[]
@@ -115,6 +116,7 @@ type MiradentContextValue = {
 }
 
 const STORAGE_KEY = 'miradent-data-v1'
+const SERVICE_CATALOG_VERSION = 1
 const DEFAULT_SPECIALTIES = [
 	'Odontología general',
 	'Ortodoncia',
@@ -230,14 +232,18 @@ function loadData(): StoredData {
 								: { ...service, specialty: service.specialty ?? DEFAULT_SPECIALTIES[0] },
 						)
 					: []
+				const needsServiceCatalogMigration = data.serviceCatalogVersion !== SERVICE_CATALOG_VERSION
 				const savedServiceNames = new Set(savedServices.map((service) => service.name))
-				const services = [
-					...savedServices,
-					...DEFAULT_SERVICES.filter((service) => !savedServiceNames.has(service.name)),
-				]
+				const services = needsServiceCatalogMigration
+					? [
+							...savedServices,
+							...DEFAULT_SERVICES.filter((service) => !savedServiceNames.has(service.name)),
+						]
+					: savedServices
 				return {
 					accounts: data.accounts,
 					currentUserId: typeof data.currentUserId === 'string' ? data.currentUserId : null,
+					serviceCatalogVersion: SERVICE_CATALOG_VERSION,
 					services,
 					availability: Array.isArray(data.availability)
 						? data.availability.map((slot) => ({
@@ -276,6 +282,7 @@ function loadData(): StoredData {
 		accounts: [ADMIN_ACCOUNT],
 		appointments: [],
 		currentUserId: null,
+		serviceCatalogVersion: SERVICE_CATALOG_VERSION,
 		services: DEFAULT_SERVICES,
 		availability: [],
 		dentists: DEFAULT_DENTISTS,
