@@ -64,6 +64,20 @@ Para comprobar la compilación:
 npm run build
 ```
 
+### Base de datos MySQL
+
+En `database/schema.sql` está el esquema inicial de MySQL: usuarios y roles, odontólogos y especialidades, servicios, horario de la clínica, cierres, disponibilidad, las dos sillas, citas y notificaciones. Incluye datos iniciales para el catálogo de MIRADENT y el procedimiento `book_appointment`, que valida los cruces dentro de una transacción.
+
+Para ejecutarlo en un servidor MySQL 8.0.16 o posterior:
+
+```bash
+mysql -u TU_USUARIO -p < database/schema.sql
+```
+
+Configura la zona horaria de la conexión de la aplicación como `America/Bogota`. Crea las cuentas administrativas desde un backend seguro y almacena contraseñas usando un algoritmo de hash; no insertes contraseñas en texto plano.
+
+**Importante:** la interfaz actual todavía guarda y consulta datos en `localStorage`; no está conectada a MySQL. Para usar esta base de datos desde la aplicación hace falta implementar un backend y darle acceso de escritura a las citas únicamente mediante `book_appointment`.
+
 **Nota académica:** la aplicación sigue utilizando `localStorage` como almacenamiento del navegador; no equivale todavía a una base de datos centralizada con backend y los cambios no se comparten entre dispositivos. Las validaciones del navegador son para demostración y no protegen contra reservas simultáneas en diferentes dispositivos. Para producción, se requiere implementar y conectar un backend.
 
 Los odontólogos A y K son registros de referencia y deben reemplazarse por los nombres reales. La disponibilidad mensual se guarda como turnos fechados y debe publicarse por cada odontólogo y especialidad desde Administración > Horarios.
