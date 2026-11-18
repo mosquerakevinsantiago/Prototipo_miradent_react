@@ -30,6 +30,7 @@ export default function PanelAdmin() {
 		appointments,
 		services,
 		availability,
+		availabilityBlocks,
 		dentists,
 		specialties,
 		notifications,
@@ -41,6 +42,8 @@ export default function PanelAdmin() {
 		generateMonthlyAvailability,
 		addAvailabilitySlot,
 		removeAvailabilitySlot,
+		addAvailabilityBlock,
+		removeAvailabilityBlock,
 		addDentist,
 		removeDentist,
 		updateProfile,
@@ -117,6 +120,13 @@ export default function PanelAdmin() {
 	const availabilityForSelectedDate = availabilityForMonth.filter(
 		(slot) => slot.date === selectedScheduleDate,
 	)
+	const blocksForSelectedDate = availabilityBlocks
+		.filter(
+			(block) =>
+				block.date === selectedScheduleDate &&
+				(!block.dentistId || block.dentistId === scheduleDentistId),
+		)
+		.sort((first, second) => first.startTime.localeCompare(second.startTime))
 	const calendarMonth = /^\d{4}-\d{2}$/.test(scheduleMonth) ? scheduleMonth : today.slice(0, 7)
 	const [scheduleYear, scheduleMonthNumber] = calendarMonth.split('-').map(Number)
 	const firstWeekday = (new Date(scheduleYear, scheduleMonthNumber - 1, 1).getDay() + 6) % 7
@@ -139,7 +149,18 @@ export default function PanelAdmin() {
 				appointment.dentistId === slot.dentistId &&
 				appointment.status !== 'Cancelada' &&
 				slotStart < toMinutes(appointment.endTime) &&
-				slotStart + 1 > toMinutes(appointment.time),
+				slotStart + 30 > toMinutes(appointment.time),
+		)
+	}
+
+	function getAvailabilityBlock(slot: (typeof availability)[number]) {
+		const slotStart = toMinutes(slot.time)
+		return availabilityBlocks.find(
+			(block) =>
+				block.date === slot.date &&
+				(!block.dentistId || block.dentistId === slot.dentistId) &&
+				slotStart < toMinutes(block.endTime) &&
+				slotStart + 30 > toMinutes(block.startTime),
 		)
 	}
 
@@ -180,6 +201,31 @@ export default function PanelAdmin() {
 				reason instanceof Error ? reason.message : 'No se pudo agregar el horario.',
 			)
 		}
+	}
+
+	function handleAddAvailabilityBlock(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault()
+		const form = new FormData(event.currentTarget)
+		try {
+			addAvailabilityBlock(
+				String(form.get('date')),
+				String(form.get('startTime')),
+				String(form.get('endTime')),
+				String(form.get('dentistId') ?? '') || null,
+				String(form.get('reason')),
+			)
+			event.currentTarget.reset()
+			setScheduleMessage('Bloqueo guardado. Los pacientes ya no verán esos horarios.')
+		} catch (reason) {
+			setScheduleMessage(
+				reason instanceof Error ? reason.message : 'No se pudo guardar el bloqueo.',
+			)
+		}
+	}
+
+	function handleRemoveAvailabilityBlock(id: string) {
+		removeAvailabilityBlock(id)
+		setScheduleMessage('Bloqueo eliminado; los horarios vuelven a estar disponibles.')
 	}
 
 	function handleGenerateMonthlyAvailability(event: FormEvent<HTMLFormElement>) {
@@ -906,6 +952,68 @@ export default function PanelAdmin() {
 							Agregar horario
 						</button>
 					</form>
+					<h3 className="schedule-subheading">Bloquear un rango u horario festivo</h3>
+					<p className="admin-help">
+						Bloquea un odontólogo o toda la clínica. El bloqueo impide reservas que se crucen con
+						ese rango y no se permite si ya hay una cita.
+					</p>
+					<form
+						className="admin-inline-form schedule-block-form"
+						onSubmit={handleAddAvailabilityBlock}
+					>
+						<label>
+							A quién aplica
+							<select name="dentistId" defaultValue="">
+								<option value="">Toda la clínica</option>
+								{dentists.map((dentist) => (
+									<option key={dentist.id} value={dentist.id}>
+										{dentist.name}
+									</option>
+								))}
+							</select>
+						</label>
+						<label>
+							Fecha
+							<input type="date" name="date" min={today} defaultValue={today} required />
+						</label>
+						<label>
+							Desde
+							<input
+								type="time"
+								name="startTime"
+								min="08:00"
+								max="18:00"
+								step="1800"
+								defaultValue="08:00"
+								required
+							/>
+						</label>
+						<label>
+							Hasta
+							<input
+								type="time"
+								name="endTime"
+								min="08:00"
+								max="18:00"
+								step="1800"
+								defaultValue="18:00"
+								required
+							/>
+						</label>
+						<label>
+							Motivo
+							<input
+								type="text"
+								name="reason"
+								maxLength={120}
+								placeholder="Ej. Festivo, permiso o mantenimiento"
+								required
+							/>
+						</label>
+						<button className="button button-outline" type="submit">
+							Bloquear disponibilidad
+						</button>
+					</form>
 					{scheduleMessage && (
 						<p className="form-note" role="status">
 							{scheduleMessage}
@@ -964,8 +1072,21 @@ export default function PanelAdmin() {
 										)
 									const daySlots = availabilityForMonth.filter((slot) => slot.date === date)
 									const bookedSlots = daySlots.filter(hasActiveAppointmentAtSlot).length
+									const blockedSlots = daySlots.filter(getAvailabilityBlock).length
+									const openSlots = daySlots.filter(
+										(slot) => !hasActiveAppointmentAtSlot(slot) && !getAvailabilityBlock(slot),
+									).length
+									const dayBlocks = availabilityBlocks.filter(
+										(block) =>
+											block.date === date &&
+											(!block.dentistId || block.dentistId === scheduleDentistId),
+									).length
 									const dayState =
-										daySlots.length === 0 ? 'Sin turnos' : `${daySlots.length - bookedSlots} turnos`
+										daySlots.length === 0
+											? dayBlocks > 0
+												? 'Bloqueado'
+												: 'Sin turnos'
+											: `${openSlots} disponibles`
 									return (
 										<button
 											key={date}
@@ -977,6 +1098,7 @@ export default function PanelAdmin() {
 											<strong>{Number(date.slice(-2))}</strong>
 											<span>{dayState}</span>
 											{bookedSlots > 0 && <small>{bookedSlots} ocupados</small>}
+											{blockedSlots > 0 && <small>{blockedSlots} bloqueados</small>}
 										</button>
 									)
 								}),
@@ -991,7 +1113,10 @@ export default function PanelAdmin() {
 										month: 'long',
 									})}
 								</h4>
-								<span>{availabilityForSelectedDate.length} turnos publicados</span>
+								<span>
+									{availabilityForSelectedDate.length} turnos · {blocksForSelectedDate.length}{' '}
+									bloqueos
+								</span>
 							</div>
 							{availabilityForSelectedDate.length === 0 ? (
 								<p className="booking-empty">
@@ -1001,14 +1126,15 @@ export default function PanelAdmin() {
 								<ul className="calendar-slot-list">
 									{availabilityForSelectedDate.map((slot) => {
 										const booked = hasActiveAppointmentAtSlot(slot)
+										const block = getAvailabilityBlock(slot)
 										return (
 											<li key={slot.id}>
 												<span
 													className={
-														booked ? 'calendar-slot-status booked' : 'calendar-slot-status'
+														booked || block ? 'calendar-slot-status booked' : 'calendar-slot-status'
 													}
 												>
-													{booked ? 'Ocupado' : 'Disponible'}
+													{booked ? 'Ocupado' : block ? 'Bloqueado' : 'Disponible'}
 												</span>
 												<strong>{slot.time}</strong>
 												<button
@@ -1023,6 +1149,31 @@ export default function PanelAdmin() {
 											</li>
 										)
 									})}
+								</ul>
+							)}
+							{blocksForSelectedDate.length > 0 && (
+								<ul className="admin-manage-list schedule-block-list">
+									{blocksForSelectedDate.map((block) => (
+										<li key={block.id}>
+											<span>
+												<strong>
+													{block.startTime}–{block.endTime} ·{' '}
+													{block.dentistId
+														? (dentists.find((dentist) => dentist.id === block.dentistId)?.name ??
+															'Odontólogo')
+														: 'Toda la clínica'}
+												</strong>
+												<small>{block.reason}</small>
+											</span>
+											<button
+												type="button"
+												className="button button-quiet"
+												onClick={() => handleRemoveAvailabilityBlock(block.id)}
+											>
+												Quitar bloqueo
+											</button>
+										</li>
+									))}
 								</ul>
 							)}
 						</section>

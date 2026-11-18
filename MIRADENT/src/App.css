@@ -732,6 +732,12 @@ main {
 .schedule-form {
   grid-template-columns: minmax(0, 1fr) minmax(0, 0.7fr) auto;
 }
+.schedule-block-form {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.schedule-block-list {
+  margin-top: 16px;
+}
 .admin-manage-list {
   margin: 20px 0 0;
   padding: 0;
@@ -1702,7 +1708,8 @@ button.booking-calendar-day:disabled {
   color: #885d1c;
 }
 @media (max-width: 760px) {
-  .monthly-schedule-form {
+  .monthly-schedule-form,
+  .schedule-block-form {
     grid-template-columns: 1fr;
   }
 }

@@ -51,6 +51,15 @@ export type AvailabilitySlot = {
 	dentistId: string
 }
 
+export type AvailabilityBlock = {
+	id: string
+	date: string
+	startTime: string
+	endTime: string
+	dentistId: string | null
+	reason: string
+}
+
 export type AdminNotification = {
 	id: string
 	appointmentId: string
@@ -66,6 +75,7 @@ type StoredData = {
 	serviceCatalogVersion: number
 	services: Service[]
 	availability: AvailabilitySlot[]
+	availabilityBlocks: AvailabilityBlock[]
 	dentists: Dentist[]
 	specialties: string[]
 	notifications: AdminNotification[]
@@ -88,6 +98,7 @@ type MiradentContextValue = {
 	appointments: Appointment[]
 	services: Service[]
 	availability: AvailabilitySlot[]
+	availabilityBlocks: AvailabilityBlock[]
 	dentists: Dentist[]
 	specialties: string[]
 	notifications: AdminNotification[]
@@ -110,6 +121,14 @@ type MiradentContextValue = {
 	generateMonthlyAvailability: (month: string, dentistId: string, weekdays: number[]) => number
 	addAvailabilitySlot: (date: string, time: string, dentistId: string) => void
 	removeAvailabilitySlot: (id: string) => void
+	addAvailabilityBlock: (
+		date: string,
+		startTime: string,
+		endTime: string,
+		dentistId: string | null,
+		reason: string,
+	) => void
+	removeAvailabilityBlock: (id: string) => void
 	addDentist: (dentist: Omit<Dentist, 'id'>) => void
 	updateDentist: (id: string, dentist: Omit<Dentist, 'id'>) => void
 	removeDentist: (id: string) => void
@@ -177,6 +196,12 @@ function getLocalDateString(date: Date) {
 	const month = String(date.getMonth() + 1).padStart(2, '0')
 	const day = String(date.getDate()).padStart(2, '0')
 	return `${year}-${month}-${day}`
+}
+
+function isValidDateString(date: string) {
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false
+	const parsedDate = new Date(`${date}T00:00:00`)
+	return !Number.isNaN(parsedDate.getTime()) && getLocalDateString(parsedDate) === date
 }
 
 function overlaps(start: number, end: number, otherStart: number, otherEnd: number) {
@@ -251,6 +276,7 @@ function loadData(): StoredData {
 								dentistId: slot.dentistId ?? DEFAULT_DENTISTS[0].id,
 							}))
 						: [],
+					availabilityBlocks: Array.isArray(data.availabilityBlocks) ? data.availabilityBlocks : [],
 					dentists: Array.isArray(data.dentists) ? data.dentists : DEFAULT_DENTISTS,
 					specialties: [
 						...new Set([
@@ -285,6 +311,7 @@ function loadData(): StoredData {
 		serviceCatalogVersion: SERVICE_CATALOG_VERSION,
 		services: DEFAULT_SERVICES,
 		availability: [],
+		availabilityBlocks: [],
 		dentists: DEFAULT_DENTISTS,
 		specialties: DEFAULT_SPECIALTIES,
 		notifications: [],
@@ -420,6 +447,15 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 				'La duración de este servicio no cabe en el horario de trabajo ni en el horario de atención (08:00–12:00 y 13:30–18:00).',
 			)
 		}
+		if (
+			data.availabilityBlocks.some(
+				(block) =>
+					block.date === details.date &&
+					(!block.dentistId || block.dentistId === details.dentistId) &&
+					overlaps(start, end, toMinutes(block.startTime), toMinutes(block.endTime)),
+			)
+		)
+			throw new Error('Ese horario está bloqueado. Selecciona otro horario disponible.')
 		const conflictingAppointments = data.appointments.filter(
 			(appointment) => appointment.date === details.date && appointment.status !== 'Cancelada',
 		)
@@ -502,6 +538,15 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 			const appointments = data.appointments.filter(
 				(appointment) => appointment.date === slot.date && appointment.status !== 'Cancelada',
 			)
+			if (
+				data.availabilityBlocks.some(
+					(block) =>
+						block.date === slot.date &&
+						(!block.dentistId || block.dentistId === slot.dentistId) &&
+						overlaps(start, end, toMinutes(block.startTime), toMinutes(block.endTime)),
+				)
+			)
+				return false
 			if (
 				appointments.some(
 					(appointment) =>
@@ -602,6 +647,15 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 					if (start < toMinutes(dentist.startTime) || start >= toMinutes(dentist.endTime)) continue
 					const time = toTimeString(start)
 					if (dateString === today && new Date(`${dateString}T${time}:00`) <= new Date()) continue
+					if (
+						data.availabilityBlocks.some(
+							(block) =>
+								block.date === dateString &&
+								(!block.dentistId || block.dentistId === dentist.id) &&
+								overlaps(start, start + 30, toMinutes(block.startTime), toMinutes(block.endTime)),
+						)
+					)
+						continue
 					const slotKey = `${dateString}|${time}|${dentist.id}`
 					if (existingSlots.has(slotKey)) continue
 					existingSlots.add(slotKey)
@@ -640,6 +694,20 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 			throw new Error('Ese horario ya está en la agenda.')
 		}
 		if (
+			data.availabilityBlocks.some(
+				(block) =>
+					block.date === date &&
+					(!block.dentistId || block.dentistId === dentistId) &&
+					overlaps(
+						toMinutes(time),
+						toMinutes(time) + 30,
+						toMinutes(block.startTime),
+						toMinutes(block.endTime),
+					),
+			)
+		)
+			throw new Error('Ese horario está dentro de un bloqueo.')
+		if (
 			data.appointments.some(
 				(appointment) =>
 					appointment.date === date &&
@@ -673,6 +741,78 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 		setData((current) => ({
 			...current,
 			availability: current.availability.filter((item) => item.id !== id),
+		}))
+	}
+
+	function addAvailabilityBlock(
+		date: string,
+		startTime: string,
+		endTime: string,
+		dentistId: string | null,
+		reason: string,
+	) {
+		const today = getLocalDateString(new Date())
+		const validTime = (time: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(time)
+		if (!isValidDateString(date) || date < today)
+			throw new Error('Selecciona una fecha válida de hoy en adelante.')
+		if (
+			!validTime(startTime) ||
+			!validTime(endTime) ||
+			startTime < '08:00' ||
+			endTime > '18:00' ||
+			startTime >= endTime
+		) {
+			throw new Error('El bloqueo debe ser un rango válido entre las 08:00 y las 18:00.')
+		}
+		if (dentistId && !data.dentists.some((dentist) => dentist.id === dentistId))
+			throw new Error('Selecciona un odontólogo válido o toda la clínica.')
+		const normalizedReason = reason.trim()
+		if (!normalizedReason) throw new Error('Escribe el motivo del bloqueo.')
+
+		const start = toMinutes(startTime)
+		const end = toMinutes(endTime)
+		if (
+			data.appointments.some(
+				(appointment) =>
+					appointment.date === date &&
+					appointment.status !== 'Cancelada' &&
+					(!dentistId || appointment.dentistId === dentistId) &&
+					overlaps(start, end, toMinutes(appointment.time), toMinutes(appointment.endTime)),
+			)
+		) {
+			throw new Error('No se puede bloquear ese rango porque ya tiene una cita reservada.')
+		}
+		if (
+			data.availabilityBlocks.some(
+				(block) =>
+					block.date === date &&
+					(!block.dentistId || !dentistId || block.dentistId === dentistId) &&
+					overlaps(start, end, toMinutes(block.startTime), toMinutes(block.endTime)),
+			)
+		) {
+			throw new Error('Ese rango ya está incluido en otro bloqueo.')
+		}
+
+		setData((current) => ({
+			...current,
+			availabilityBlocks: [
+				...current.availabilityBlocks,
+				{
+					id: crypto.randomUUID(),
+					date,
+					startTime,
+					endTime,
+					dentistId,
+					reason: normalizedReason,
+				},
+			],
+		}))
+	}
+
+	function removeAvailabilityBlock(id: string) {
+		setData((current) => ({
+			...current,
+			availabilityBlocks: current.availabilityBlocks.filter((block) => block.id !== id),
 		}))
 	}
 
@@ -729,6 +869,7 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 				appointments: data.appointments,
 				services: data.services,
 				availability: data.availability,
+				availabilityBlocks: data.availabilityBlocks,
 				dentists: data.dentists,
 				specialties: data.specialties,
 				notifications: data.notifications,
@@ -746,6 +887,8 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 				generateMonthlyAvailability,
 				addAvailabilitySlot,
 				removeAvailabilitySlot,
+				addAvailabilityBlock,
+				removeAvailabilityBlock,
 				addDentist,
 				updateDentist,
 				removeDentist,
