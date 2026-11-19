@@ -140,13 +140,13 @@ export default function AppContent() {
 							Administración
 						</button>
 					)}
-					{currentUser?.role === 'patient' && (
+					{(currentUser?.role === 'patient' || currentUser?.role === 'dentist') && (
 						<button
 							type="button"
 							className={view === 'citas' ? 'nav-link active' : 'nav-link'}
 							onClick={() => navigate('citas')}
 						>
-							Mis citas
+							{currentUser.role === 'dentist' ? 'Mi agenda' : 'Mis citas'}
 						</button>
 					)}
 				</nav>
@@ -164,7 +164,11 @@ export default function AppContent() {
 						<>
 							<span className="user-greeting">
 								Hola, {currentUser.name.split(' ')[0]}{' '}
-								{currentUser.role === 'admin' ? 'ADMIN' : 'usuario'}
+								{currentUser.role === 'admin'
+									? 'ADMIN'
+									: currentUser.role === 'dentist'
+										? 'Odontólogo'
+										: 'usuario'}
 							</span>
 							{currentUser.role === 'admin' && (
 								<button
@@ -428,7 +432,8 @@ export default function AppContent() {
 						onLogin={() => navigate('login')}
 					/>
 				)}
-				{view === 'citas' && currentUser?.role === 'patient' && <AgendarCita />}
+				{view === 'citas' &&
+					(currentUser?.role === 'patient' || currentUser?.role === 'dentist') && <AgendarCita />}
 				{view === 'admin' && currentUser?.role === 'admin' && <PanelAdmin />}
 				{view === 'accesibilidad' && (
 					<section

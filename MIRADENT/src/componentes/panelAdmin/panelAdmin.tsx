@@ -1,9 +1,21 @@
 import { useState, type FormEvent } from 'react'
-import { useMiradent, type AppointmentStatus } from '../../context'
+import { useMiradent, type AppointmentStatus, type Dentist, type UserRole } from '../../context'
 
 type AdminPage =
-	'resumen' | 'citas' | 'notificaciones' | 'servicios' | 'odontologos' | 'horarios' | 'perfil'
+	| 'resumen'
+	| 'citas'
+	| 'notificaciones'
+	| 'servicios'
+	| 'especialidades'
+	| 'odontologos'
+	| 'usuarios'
+	| 'horarios'
+	| 'perfil'
 type AppointmentFilter = 'Todas' | 'Activas' | AppointmentStatus
+
+function isUserRole(value: string): value is UserRole {
+	return value === 'patient' || value === 'dentist' || value === 'admin'
+}
 
 const appointmentStatuses: AppointmentStatus[] = [
 	'Pendiente',
@@ -27,6 +39,7 @@ function toMinutes(time: string) {
 export default function PanelAdmin() {
 	const {
 		currentUser,
+		users,
 		appointments,
 		services,
 		availability,
@@ -45,7 +58,12 @@ export default function PanelAdmin() {
 		addAvailabilityBlock,
 		removeAvailabilityBlock,
 		addDentist,
+		updateDentist,
 		removeDentist,
+		addSpecialty,
+		renameSpecialty,
+		removeSpecialty,
+		updateAccountRole,
 		updateProfile,
 	} = useMiradent()
 	const initialScheduleSpecialty = specialties[0] ?? ''
@@ -74,12 +92,18 @@ export default function PanelAdmin() {
 		getLocalDateString(new Date()),
 	)
 	const [dentistMessage, setDentistMessage] = useState('')
+	const [editingDentistId, setEditingDentistId] = useState<string | null>(null)
 	const [dentistForm, setDentistForm] = useState({
 		name: '',
 		specialties: [specialties[0] ?? 'Odontología general'],
 		startTime: '08:00',
 		endTime: '18:00',
 	})
+	const [specialtyMessage, setSpecialtyMessage] = useState('')
+	const [specialtyName, setSpecialtyName] = useState('')
+	const [editingSpecialty, setEditingSpecialty] = useState<string | null>(null)
+	const [editedSpecialtyName, setEditedSpecialtyName] = useState('')
+	const [userMessage, setUserMessage] = useState('')
 	const [profileMessage, setProfileMessage] = useState('')
 	const [profile, setProfile] = useState({
 		name: currentUser?.name ?? '',
@@ -247,14 +271,36 @@ export default function PanelAdmin() {
 	function handleAddDentist(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault()
 		try {
-			addDentist(dentistForm)
-			setDentistForm((current) => ({ ...current, name: '' }))
-			setDentistMessage('Odontólogo agregado correctamente.')
+			if (editingDentistId) {
+				updateDentist(editingDentistId, dentistForm)
+				setDentistMessage('Ficha de odontólogo actualizada correctamente.')
+			} else {
+				addDentist(dentistForm)
+				setDentistMessage('Odontólogo agregado correctamente.')
+			}
+			setEditingDentistId(null)
+			setDentistForm({
+				name: '',
+				specialties: [specialties[0] ?? 'Odontología general'],
+				startTime: '08:00',
+				endTime: '18:00',
+			})
 		} catch (reason) {
 			setDentistMessage(
 				reason instanceof Error ? reason.message : 'No se pudo agregar el odontólogo.',
 			)
 		}
+	}
+
+	function handleEditDentist(dentist: Dentist) {
+		setEditingDentistId(dentist.id)
+		setDentistForm({
+			name: dentist.name,
+			specialties: dentist.specialties,
+			startTime: dentist.startTime,
+			endTime: dentist.endTime,
+		})
+		setDentistMessage('')
 	}
 
 	function handleRemoveDentist(id: string) {
@@ -264,6 +310,77 @@ export default function PanelAdmin() {
 		} catch (reason) {
 			setDentistMessage(
 				reason instanceof Error ? reason.message : 'No se pudo eliminar el odontólogo.',
+			)
+		}
+	}
+
+	function handleAddSpecialty(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault()
+		try {
+			addSpecialty(specialtyName)
+			setSpecialtyName('')
+			setSpecialtyMessage('Especialidad agregada correctamente.')
+		} catch (reason) {
+			setSpecialtyMessage(
+				reason instanceof Error ? reason.message : 'No se pudo agregar la especialidad.',
+			)
+		}
+	}
+
+	function handleRenameSpecialty(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault()
+		if (!editingSpecialty) return
+		try {
+			renameSpecialty(editingSpecialty, editedSpecialtyName)
+			setServiceSpecialty((value) =>
+				value === editingSpecialty ? editedSpecialtyName.trim() : value,
+			)
+			setEditedServiceSpecialty((value) =>
+				value === editingSpecialty ? editedSpecialtyName.trim() : value,
+			)
+			setScheduleSpecialty((value) =>
+				value === editingSpecialty ? editedSpecialtyName.trim() : value,
+			)
+			setDentistForm((current) => ({
+				...current,
+				specialties: current.specialties.map((value) =>
+					value === editingSpecialty ? editedSpecialtyName.trim() : value,
+				),
+			}))
+			setEditingSpecialty(null)
+			setSpecialtyMessage('Especialidad actualizada y vinculaciones conservadas.')
+		} catch (reason) {
+			setSpecialtyMessage(
+				reason instanceof Error ? reason.message : 'No se pudo actualizar la especialidad.',
+			)
+		}
+	}
+
+	function handleRemoveSpecialty(specialty: string) {
+		try {
+			removeSpecialty(specialty)
+			setSpecialtyMessage('Especialidad eliminada.')
+		} catch (reason) {
+			setSpecialtyMessage(
+				reason instanceof Error ? reason.message : 'No se pudo eliminar la especialidad.',
+			)
+		}
+	}
+
+	function handleUpdateAccountRole(event: FormEvent<HTMLFormElement>, userId: string) {
+		event.preventDefault()
+		const form = new FormData(event.currentTarget)
+		const role = String(form.get('role'))
+		if (!isUserRole(role)) {
+			setUserMessage('Selecciona un rol válido.')
+			return
+		}
+		try {
+			updateAccountRole(userId, role, String(form.get('dentistId') ?? '') || undefined)
+			setUserMessage('Rol de cuenta actualizado correctamente.')
+		} catch (reason) {
+			setUserMessage(
+				reason instanceof Error ? reason.message : 'No se pudo actualizar el rol de la cuenta.',
 			)
 		}
 	}
@@ -348,7 +465,9 @@ export default function PanelAdmin() {
 						['citas', 'Citas'],
 						['notificaciones', `Notificaciones${unreadCount ? ` (${unreadCount})` : ''}`],
 						['servicios', 'Servicios'],
+						['especialidades', 'Especialidades'],
 						['odontologos', 'Odontólogos'],
+						['usuarios', 'Cuentas y roles'],
 						['horarios', 'Horarios'],
 						['perfil', 'Mi perfil'],
 					] as [AdminPage, string][]
@@ -754,15 +873,16 @@ export default function PanelAdmin() {
 								multiple
 								size={specialties.length}
 								value={dentistForm.specialties}
-								onChange={(event) =>
+								onChange={(event) => {
+									const selectedSpecialties = Array.from(
+										event.currentTarget.selectedOptions,
+										(option) => option.value,
+									)
 									setDentistForm((current) => ({
 										...current,
-										specialties: Array.from(
-											event.currentTarget.selectedOptions,
-											(option) => option.value,
-										),
+										specialties: selectedSpecialties,
 									}))
-								}
+								}}
 							>
 								{specialties.map((specialty) => (
 									<option key={specialty} value={specialty}>
@@ -798,9 +918,30 @@ export default function PanelAdmin() {
 								required
 							/>
 						</label>
-						<button className="button button-primary" type="submit">
-							Agregar odontólogo
+						<button
+							className="button button-primary"
+							type="submit"
+							disabled={specialties.length === 0}
+						>
+							{editingDentistId ? 'Guardar cambios' : 'Agregar odontólogo'}
 						</button>
+						{editingDentistId && (
+							<button
+								className="button button-quiet"
+								type="button"
+								onClick={() => {
+									setEditingDentistId(null)
+									setDentistForm({
+										name: '',
+										specialties: [specialties[0] ?? 'Odontología general'],
+										startTime: '08:00',
+										endTime: '18:00',
+									})
+								}}
+							>
+								Cancelar edición
+							</button>
+						)}
 					</form>
 					{dentistMessage && (
 						<p className="form-note" role="status">
@@ -818,16 +959,209 @@ export default function PanelAdmin() {
 										{dentist.specialties.join(', ')} · {dentist.startTime} a {dentist.endTime}
 									</small>
 								</span>
-								<button
-									type="button"
-									className="button button-quiet"
-									onClick={() => handleRemoveDentist(dentist.id)}
-								>
-									Eliminar
-								</button>
+								<div className="admin-list-actions">
+									<button
+										type="button"
+										className="button button-quiet"
+										onClick={() => handleEditDentist(dentist)}
+									>
+										Editar
+									</button>
+									<button
+										type="button"
+										className="button button-quiet"
+										onClick={() => handleRemoveDentist(dentist.id)}
+									>
+										Eliminar
+									</button>
+								</div>
 							</li>
 						))}
 					</ul>
+					{dentists.length === 0 && (
+						<p className="empty-state">Todavía no hay odontólogos registrados.</p>
+					)}
+				</section>
+			)}
+
+			{page === 'especialidades' && (
+				<section className="admin-management">
+					<div className="section-heading admin-heading">
+						<div>
+							<p className="eyebrow">Catálogo clínico</p>
+							<h2>Especialidades</h2>
+						</div>
+					</div>
+					<p className="admin-help">
+						Administra las áreas disponibles. Al renombrar una especialidad, los odontólogos y
+						servicios vinculados se actualizan automáticamente. Para eliminarla primero quítala de
+						los odontólogos y servicios que la utilizan.
+					</p>
+					<form className="admin-inline-form" onSubmit={handleAddSpecialty}>
+						<label>
+							Nueva especialidad
+							<input
+								value={specialtyName}
+								onChange={(event) => setSpecialtyName(event.target.value)}
+								maxLength={80}
+								required
+								placeholder="Ej. Cirugía oral"
+							/>
+						</label>
+						<button className="button button-primary" type="submit">
+							Agregar especialidad
+						</button>
+					</form>
+					{specialtyMessage && (
+						<p className="form-note" role="status">
+							{specialtyMessage}
+						</p>
+					)}
+					<ul className="admin-manage-list">
+						{specialties.map((specialty) => (
+							<li key={specialty}>
+								{editingSpecialty === specialty ? (
+									<form className="admin-edit-service" onSubmit={handleRenameSpecialty}>
+										<input
+											aria-label="Nombre de la especialidad"
+											value={editedSpecialtyName}
+											onChange={(event) => setEditedSpecialtyName(event.target.value)}
+											maxLength={80}
+											required
+											autoFocus
+										/>
+										<button type="submit" className="button button-primary">
+											Guardar
+										</button>
+										<button
+											type="button"
+											className="button button-quiet"
+											onClick={() => setEditingSpecialty(null)}
+										>
+											Cancelar
+										</button>
+									</form>
+								) : (
+									<>
+										<span>
+											<strong>{specialty}</strong>
+											<small>
+												{
+													dentists.filter((dentist) => dentist.specialties.includes(specialty))
+														.length
+												}{' '}
+												odontólogos ·{' '}
+												{services.filter((service) => service.specialty === specialty).length}{' '}
+												servicios
+											</small>
+										</span>
+										<div className="admin-list-actions">
+											<button
+												type="button"
+												className="button button-quiet"
+												onClick={() => {
+													setEditingSpecialty(specialty)
+													setEditedSpecialtyName(specialty)
+												}}
+											>
+												Editar
+											</button>
+											<button
+												type="button"
+												className="button button-quiet"
+												onClick={() => handleRemoveSpecialty(specialty)}
+											>
+												Eliminar
+											</button>
+										</div>
+									</>
+								)}
+							</li>
+						))}
+					</ul>
+				</section>
+			)}
+
+			{page === 'usuarios' && (
+				<section className="admin-management">
+					<div className="section-heading admin-heading">
+						<div>
+							<p className="eyebrow">Acceso al sistema</p>
+							<h2>Cuentas y roles</h2>
+						</div>
+					</div>
+					<p className="admin-help">
+						El registro público crea cuentas de paciente. Desde aquí puedes cambiar el rol y
+						vincular una cuenta de odontólogo con su ficha clínica. Las contraseñas no se muestran.
+						Para proteger el acceso, no puedes cambiar tu propio rol ni quitar el último
+						administrador.
+					</p>
+					{userMessage && (
+						<p className="form-note" role="status">
+							{userMessage}
+						</p>
+					)}
+					<ul className="admin-manage-list account-manage-list">
+						{users.map((user) => {
+							const isCurrentUser = user.id === currentUser?.id
+							const linkedDentistIds = new Set(
+								users
+									.filter((account) => account.id !== user.id && account.role === 'dentist')
+									.map((account) => account.dentistId),
+							)
+							return (
+								<li key={user.id}>
+									<span>
+										<strong>{user.name}</strong>
+										<small>
+											{user.email} · {user.phone || 'Sin teléfono'}
+										</small>
+									</span>
+									<form
+										className="account-role-form"
+										onSubmit={(event) => handleUpdateAccountRole(event, user.id)}
+									>
+										<label>
+											Rol
+											<select name="role" defaultValue={user.role} disabled={isCurrentUser}>
+												<option value="patient">Paciente</option>
+												<option value="dentist">Odontólogo</option>
+												<option value="admin">Administrador</option>
+											</select>
+										</label>
+										<label>
+											Ficha de odontólogo
+											<select
+												name="dentistId"
+												defaultValue={user.dentistId ?? ''}
+												disabled={isCurrentUser || dentists.length === 0}
+											>
+												<option value="">Sin vincular</option>
+												{dentists
+													.filter(
+														(dentist) =>
+															!linkedDentistIds.has(dentist.id) || user.dentistId === dentist.id,
+													)
+													.map((dentist) => (
+														<option key={dentist.id} value={dentist.id}>
+															{dentist.name} · ID {dentist.id}
+														</option>
+													))}
+											</select>
+										</label>
+										<button
+											className="button button-primary"
+											type="submit"
+											disabled={isCurrentUser}
+										>
+											{isCurrentUser ? 'Cuenta actual' : 'Guardar rol'}
+										</button>
+									</form>
+								</li>
+							)
+						})}
+					</ul>
+					{users.length === 0 && <p className="empty-state">No hay cuentas registradas.</p>}
 				</section>
 			)}
 

@@ -87,6 +87,78 @@ export default function AgendarCita() {
 		}
 	}
 
+	if (currentUser?.role === 'dentist') {
+		const dentist = dentists.find((item) => item.id === currentUser.dentistId)
+		const dentistAppointments = appointments
+			.filter((appointment) => appointment.dentistId === currentUser.dentistId)
+			.sort((first, second) =>
+				`${first.date}${first.time}`.localeCompare(`${second.date}${second.time}`),
+			)
+
+		return (
+			<section className="content-section">
+				<p className="eyebrow">Agenda profesional</p>
+				<h1>{dentist ? `Agenda de ${dentist.name}` : 'Mi agenda'}</h1>
+				{!dentist ? (
+					<p className="empty-state">
+						Tu cuenta todavía no está vinculada a una ficha de odontólogo. Comunícate con
+						administración para completar la configuración.
+					</p>
+				) : dentistAppointments.length === 0 ? (
+					<p className="empty-state">Todavía no tienes citas asignadas.</p>
+				) : (
+					<div className="appointment-list">
+						{dentistAppointments.map((appointment) => (
+							<article className="appointment-row" key={appointment.id}>
+								<div>
+									<strong>
+										{appointment.patientName} · {appointment.service}
+									</strong>
+									<p>
+										{new Date(`${appointment.date}T00:00:00`).toLocaleDateString('es', {
+											weekday: 'long',
+											day: 'numeric',
+											month: 'long',
+											year: 'numeric',
+										})}{' '}
+										· {appointment.time}–{appointment.endTime} ·{' '}
+										{appointment.chairId.replace('chair-', 'Silla ')}
+									</p>
+									<p>
+										{appointment.phone}
+										{appointment.email ? ` · ${appointment.email}` : ''}
+									</p>
+									{appointment.notes && <p>Comentarios: {appointment.notes}</p>}
+								</div>
+								<span className={`status status-${appointment.status.toLowerCase()}`}>
+									{appointment.status}
+								</span>
+								{appointment.status === 'Pendiente' && (
+									<button
+										className="button button-quiet"
+										type="button"
+										onClick={() => updateAppointmentStatus(appointment.id, 'Confirmada')}
+									>
+										Confirmar
+									</button>
+								)}
+								{appointment.status === 'Confirmada' && (
+									<button
+										className="button button-quiet"
+										type="button"
+										onClick={() => updateAppointmentStatus(appointment.id, 'Completada')}
+									>
+										Marcar completada
+									</button>
+								)}
+							</article>
+						))}
+					</div>
+				)}
+			</section>
+		)
+	}
+
 	return (
 		<section className="content-section">
 			<p className="eyebrow">Atención personalizada</p>

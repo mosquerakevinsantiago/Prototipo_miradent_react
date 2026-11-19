@@ -1,11 +1,14 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 
+export type UserRole = 'admin' | 'dentist' | 'patient'
+
 export type User = {
 	id: string
 	name: string
 	email: string
 	phone: string
-	role: 'admin' | 'patient'
+	role: UserRole
+	dentistId?: string
 }
 
 type Account = User & { password: string }
@@ -96,6 +99,7 @@ type AppointmentDetails = Omit<
 
 type MiradentContextValue = {
 	currentUser: User | null
+	users: User[]
 	appointments: Appointment[]
 	services: Service[]
 	availability: AvailabilitySlot[]
@@ -106,6 +110,7 @@ type MiradentContextValue = {
 	login: (email: string, password: string) => User | null
 	register: (name: string, email: string, phone: string, password: string) => void
 	logout: () => void
+	updateAccountRole: (userId: string, role: UserRole, dentistId?: string) => void
 	updateProfile: (details: ProfileDetails) => void
 	addAppointment: (details: AppointmentDetails) => void
 	updateAppointmentStatus: (id: string, status: AppointmentStatus) => void
@@ -133,6 +138,9 @@ type MiradentContextValue = {
 	addDentist: (dentist: Omit<Dentist, 'id'>) => void
 	updateDentist: (id: string, dentist: Omit<Dentist, 'id'>) => void
 	removeDentist: (id: string) => void
+	addSpecialty: (specialty: string) => void
+	renameSpecialty: (oldSpecialty: string, newSpecialty: string) => void
+	removeSpecialty: (specialty: string) => void
 }
 
 const STORAGE_KEY = 'miradent-data-v1'
@@ -427,6 +435,7 @@ const MiradentContext = createContext<MiradentContextValue | null>(null)
 export function MiradentProvider({ children }: { children: ReactNode }) {
 	const [data, setData] = useState<StoredData>(loadData)
 	const currentUser = data.accounts.find((account) => account.id === data.currentUserId) ?? null
+	const users = data.accounts.map(({ password: _password, ...user }) => user)
 	const publicUser = currentUser
 		? {
 				id: currentUser.id,
@@ -434,6 +443,7 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 				email: currentUser.email,
 				phone: currentUser.phone,
 				role: currentUser.role,
+				...(currentUser.dentistId ? { dentistId: currentUser.dentistId } : {}),
 			}
 		: null
 
@@ -455,6 +465,7 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 			email: account.email,
 			phone: account.phone,
 			role: account.role,
+			...(account.dentistId ? { dentistId: account.dentistId } : {}),
 		}
 	}
 
@@ -481,6 +492,38 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 
 	function logout() {
 		setData((current) => ({ ...current, currentUserId: null }))
+	}
+
+	function updateAccountRole(userId: string, role: UserRole, dentistId?: string) {
+		if (currentUser?.role !== 'admin')
+			throw new Error('Solo administración puede gestionar los roles de las cuentas.')
+		const account = data.accounts.find((item) => item.id === userId)
+		if (!account) throw new Error('No se encontró la cuenta seleccionada.')
+		if (account.id === currentUser?.id)
+			throw new Error('No puedes cambiar el rol de tu propia cuenta de administración.')
+		if (
+			role === 'admin' &&
+			!data.accounts.some((item) => item.id !== userId && item.role === 'admin')
+		)
+			throw new Error('Debe mantenerse al menos una cuenta administradora.')
+		if (role === 'dentist') {
+			if (!dentistId || !data.dentists.some((dentist) => dentist.id === dentistId))
+				throw new Error('Vincula la cuenta con una ficha de odontólogo.')
+			if (
+				data.accounts.some(
+					(item) => item.id !== userId && item.role === 'dentist' && item.dentistId === dentistId,
+				)
+			)
+				throw new Error('Ese odontólogo ya está vinculado a otra cuenta.')
+		}
+		setData((current) => ({
+			...current,
+			accounts: current.accounts.map((item) =>
+				item.id === userId
+					? { ...item, role, ...(role === 'dentist' ? { dentistId } : { dentistId: undefined }) }
+					: item,
+			),
+		}))
 	}
 
 	function updateProfile(details: ProfileDetails) {
@@ -607,6 +650,22 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 	}
 
 	function updateAppointmentStatus(id: string, status: AppointmentStatus) {
+		const appointment = data.appointments.find((item) => item.id === id)
+		if (!currentUser || !appointment) throw new Error('No se encontró la cita seleccionada.')
+		if (currentUser.role === 'patient') {
+			if (
+				appointment.userId !== currentUser.id ||
+				appointment.status !== 'Pendiente' ||
+				status !== 'Cancelada'
+			)
+				throw new Error('Solo puedes cancelar tus propias citas pendientes.')
+		} else if (currentUser.role === 'dentist') {
+			const validTransition =
+				(appointment.status === 'Pendiente' && status === 'Confirmada') ||
+				(appointment.status === 'Confirmada' && status === 'Completada')
+			if (appointment.dentistId !== currentUser.dentistId || !validTransition)
+				throw new Error('Solo puedes actualizar el estado de tus citas asignadas.')
+		}
 		setData((current) => ({
 			...current,
 			appointments: current.appointments.map((appointment) =>
@@ -616,6 +675,8 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 	}
 
 	function markNotificationRead(id: string) {
+		if (currentUser?.role !== 'admin')
+			throw new Error('Solo administración puede gestionar las notificaciones.')
 		setData((current) => ({
 			...current,
 			notifications: current.notifications.map((notification) =>
@@ -945,6 +1006,14 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 	function updateDentist(id: string, details: Omit<Dentist, 'id'>) {
 		const name = details.name.trim()
 		if (!name) throw new Error('Escribe el nombre del odontólogo.')
+		if (!data.dentists.some((dentist) => dentist.id === id))
+			throw new Error('No se encontró la ficha del odontólogo.')
+		if (
+			data.dentists.some(
+				(dentist) => dentist.id !== id && dentist.name.toLowerCase() === name.toLowerCase(),
+			)
+		)
+			throw new Error('Ya existe un odontólogo con ese nombre.')
 		if (
 			details.specialties.length === 0 ||
 			details.specialties.some((specialty) => !data.specialties.includes(specialty))
@@ -964,6 +1033,7 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 
 	function removeDentist(id: string) {
 		if (
+			data.accounts.some((account) => account.role === 'dentist' && account.dentistId === id) ||
 			data.availability.some((slot) => slot.dentistId === id) ||
 			data.appointments.some(
 				(appointment) => appointment.dentistId === id && appointment.status !== 'Cancelada',
@@ -976,10 +1046,63 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 		}))
 	}
 
+	function addSpecialty(specialty: string) {
+		if (currentUser?.role !== 'admin')
+			throw new Error('Solo administración puede gestionar las especialidades.')
+		const normalized = specialty.trim()
+		if (!normalized) throw new Error('Escribe el nombre de la especialidad.')
+		if (data.specialties.some((item) => item.toLowerCase() === normalized.toLowerCase()))
+			throw new Error('Esa especialidad ya existe.')
+		setData((current) => ({ ...current, specialties: [...current.specialties, normalized] }))
+	}
+
+	function renameSpecialty(oldSpecialty: string, newSpecialty: string) {
+		if (currentUser?.role !== 'admin')
+			throw new Error('Solo administración puede gestionar las especialidades.')
+		const normalized = newSpecialty.trim()
+		if (!normalized) throw new Error('Escribe el nombre de la especialidad.')
+		if (!data.specialties.includes(oldSpecialty))
+			throw new Error('No se encontró la especialidad seleccionada.')
+		if (
+			data.specialties.some(
+				(item) => item !== oldSpecialty && item.toLowerCase() === normalized.toLowerCase(),
+			)
+		)
+			throw new Error('Ya existe una especialidad con ese nombre.')
+		setData((current) => ({
+			...current,
+			specialties: current.specialties.map((item) => (item === oldSpecialty ? normalized : item)),
+			services: current.services.map((service) =>
+				service.specialty === oldSpecialty ? { ...service, specialty: normalized } : service,
+			),
+			dentists: current.dentists.map((dentist) => ({
+				...dentist,
+				specialties: dentist.specialties.map((item) => (item === oldSpecialty ? normalized : item)),
+			})),
+		}))
+	}
+
+	function removeSpecialty(specialty: string) {
+		if (currentUser?.role !== 'admin')
+			throw new Error('Solo administración puede gestionar las especialidades.')
+		if (
+			data.services.some((service) => service.specialty === specialty) ||
+			data.dentists.some((dentist) => dentist.specialties.includes(specialty))
+		)
+			throw new Error(
+				'No se puede eliminar: hay servicios u odontólogos que usan esta especialidad.',
+			)
+		setData((current) => ({
+			...current,
+			specialties: current.specialties.filter((item) => item !== specialty),
+		}))
+	}
+
 	return (
 		<MiradentContext.Provider
 			value={{
 				currentUser: publicUser,
+				users,
 				appointments: data.appointments,
 				services: data.services,
 				availability: data.availability,
@@ -990,6 +1113,7 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 				login,
 				register,
 				logout,
+				updateAccountRole,
 				updateProfile,
 				addAppointment,
 				updateAppointmentStatus,
@@ -1006,6 +1130,9 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 				addDentist,
 				updateDentist,
 				removeDentist,
+				addSpecialty,
+				renameSpecialty,
+				removeSpecialty,
 			}}
 		>
 			{children}

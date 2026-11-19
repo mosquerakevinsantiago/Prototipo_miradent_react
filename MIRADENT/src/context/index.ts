@@ -7,4 +7,5 @@ export type {
 	Dentist,
 	Service,
 	User,
+	UserRole,
 } from './MiradentContext'
