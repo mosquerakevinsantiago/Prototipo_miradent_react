@@ -162,7 +162,10 @@ export default function AppContent() {
 					)}
 					{currentUser ? (
 						<>
-							<span className="user-greeting">Hola, {currentUser.name.split(' ')[0]}</span>
+							<span className="user-greeting">
+								Hola, {currentUser.name.split(' ')[0]}{' '}
+								{currentUser.role === 'admin' ? 'ADMIN' : 'usuario'}
+							</span>
 							{currentUser.role === 'admin' && (
 								<button
 									type="button"
