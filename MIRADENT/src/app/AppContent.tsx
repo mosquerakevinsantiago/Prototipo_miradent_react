@@ -4,18 +4,73 @@ import { useMiradent } from '../context'
 import '../App.css'
 
 type View = 'inicio' | 'login' | 'registro' | 'citas' | 'admin' | 'accesibilidad'
+type AccessibilityPreferences = {
+	textSize: 100 | 110 | 125 | 150
+	highContrast: boolean
+	reducedMotion: boolean
+	readableFont: boolean
+	underlineLinks: boolean
+	highlightFocus: boolean
+	largeCursor: boolean
+	readingSpacing: boolean
+}
 const ACCESSIBLE_TEXT_SELECTOR =
 	'h1,h2,h3,h4,p,button,a,label,input,select,textarea,li,th,td,small,strong,span,legend,.eyebrow,.user-greeting,.nav-link,.form-note,.form-intro,.status'
+const ACCESSIBILITY_STORAGE_KEY = 'miradent-accessibility-v1'
+const DEFAULT_ACCESSIBILITY_PREFERENCES: AccessibilityPreferences = {
+	textSize: 100,
+	highContrast: false,
+	reducedMotion: false,
+	readableFont: false,
+	underlineLinks: false,
+	highlightFocus: false,
+	largeCursor: false,
+	readingSpacing: false,
+}
+
+function loadAccessibilityPreferences(): AccessibilityPreferences {
+	try {
+		const saved = localStorage.getItem(ACCESSIBILITY_STORAGE_KEY)
+		if (!saved) return DEFAULT_ACCESSIBILITY_PREFERENCES
+		const parsed = JSON.parse(saved) as Partial<AccessibilityPreferences>
+		return {
+			...DEFAULT_ACCESSIBILITY_PREFERENCES,
+			...parsed,
+			textSize: [100, 110, 125, 150].includes(parsed.textSize ?? 100)
+				? (parsed.textSize as AccessibilityPreferences['textSize'])
+				: 100,
+		}
+	} catch (error) {
+		console.error('No se pudieron cargar las preferencias de accesibilidad.', error)
+		return DEFAULT_ACCESSIBILITY_PREFERENCES
+	}
+}
 
 export default function AppContent() {
 	const { currentUser, login, logout } = useMiradent()
 	const [view, setView] = useState<View>('inicio')
 	const [loginError, setLoginError] = useState('')
-	const [textSize, setTextSize] = useState<100 | 110 | 125>(100)
-	const [highContrast, setHighContrast] = useState(false)
-	const [reducedMotion, setReducedMotion] = useState(false)
+	const [accessibility, setAccessibility] = useState(loadAccessibilityPreferences)
 	const sectionToScroll = useRef<string | null>(null)
 	const accessibilityShell = useRef<HTMLDivElement>(null)
+	const {
+		textSize,
+		highContrast,
+		reducedMotion,
+		readableFont,
+		underlineLinks,
+		highlightFocus,
+		largeCursor,
+		readingSpacing,
+	} = accessibility
+
+	useEffect(() => {
+		try {
+			localStorage.setItem(ACCESSIBILITY_STORAGE_KEY, JSON.stringify(accessibility))
+		} catch (error) {
+			console.error('No se pudieron guardar las preferencias de accesibilidad.', error)
+		}
+	}, [accessibility])
 
 	useEffect(() => {
 		if (view !== 'inicio' || !sectionToScroll.current) return
@@ -92,11 +147,32 @@ export default function AppContent() {
 		navigate(currentUser ? 'citas' : 'registro')
 	}
 
+	function updateAccessibility<K extends keyof AccessibilityPreferences>(
+		key: K,
+		value: AccessibilityPreferences[K],
+	) {
+		setAccessibility((current) => ({ ...current, [key]: value }))
+	}
+
 	return (
 		<div
 			ref={accessibilityShell}
-			className={`site-shell${highContrast ? ' accessibility-high-contrast' : ''}${reducedMotion ? ' accessibility-reduced-motion' : ''}`}
+			className={[
+				'site-shell',
+				highContrast && 'accessibility-high-contrast',
+				reducedMotion && 'accessibility-reduced-motion',
+				readableFont && 'accessibility-readable-font',
+				underlineLinks && 'accessibility-underline-links',
+				highlightFocus && 'accessibility-highlight-focus',
+				largeCursor && 'accessibility-large-cursor',
+				readingSpacing && 'accessibility-reading-spacing',
+			]
+				.filter(Boolean)
+				.join(' ')}
 		>
+			<a className="skip-to-content" href="#main-content">
+				Saltar al contenido principal
+			</a>
 			<header className="site-header">
 				<button
 					type="button"
@@ -129,17 +205,26 @@ export default function AppContent() {
 					</button>
 					<button
 						type="button"
-						className={view === 'accesibilidad' ? 'nav-link active' : 'nav-link'}
+						className={`nav-link accessibility-icon-button${view === 'accesibilidad' ? ' active' : ''}`}
 						onClick={() => navigate('accesibilidad')}
 						aria-current={view === 'accesibilidad' ? 'page' : undefined}
+						aria-label="Accesibilidad"
+						title="Accesibilidad"
 					>
-						Accesibilidad
+						<svg
+							aria-hidden="true"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							strokeWidth="1.8"
+							strokeLinecap="round"
+							strokeLinejoin="round"
+						>
+							<circle cx="12" cy="12" r="10" />
+							<circle cx="12" cy="6.8" r="1.4" />
+							<path d="M5.2 10.1 12 12l6.8-1.9M12 12v4.1m0 0-3.1 4.2m3.1-4.2 3.1 4.2" />
+						</svg>
 					</button>
-					{!currentUser && (
-						<button type="button" className="nav-link" onClick={() => navigate('admin')}>
-							Administración
-						</button>
-					)}
 					{(currentUser?.role === 'patient' || currentUser?.role === 'dentist') && (
 						<button
 							type="button"
@@ -195,7 +280,7 @@ export default function AppContent() {
 				</div>
 			</header>
 
-			<main>
+			<main id="main-content" tabIndex={-1}>
 				{view === 'inicio' && (
 					<>
 						<section className="home-hero" id="inicio">
@@ -443,8 +528,9 @@ export default function AppContent() {
 						<p className="eyebrow">Preferencias de visualización</p>
 						<h1 id="accessibility-title">Accesibilidad</h1>
 						<p className="form-intro">
-							Ajusta la presentación de MIRADENT para que te resulte más cómoda. Los cambios se
-							aplican al instante mientras navegas.
+							Personaliza la lectura y navegación según tus preferencias. Los ajustes se guardan en
+							este dispositivo. Esta herramienta complementa, pero no sustituye, lectores de
+							pantalla u otras tecnologías de apoyo.
 						</p>
 						<div className="accessibility-controls">
 							<section className="accessibility-control-card" aria-labelledby="text-size-title">
@@ -457,7 +543,7 @@ export default function AppContent() {
 									role="group"
 									aria-label="Tamaño del contenido"
 								>
-									{([100, 110, 125] as const).map((size) => (
+									{([100, 110, 125, 150] as const).map((size) => (
 										<button
 											key={size}
 											type="button"
@@ -465,7 +551,7 @@ export default function AppContent() {
 												textSize === size ? 'button button-primary' : 'button button-outline'
 											}
 											aria-pressed={textSize === size}
-											onClick={() => setTextSize(size)}
+											onClick={() => updateAccessibility('textSize', size)}
 										>
 											{size === 100 ? 'Normal' : `${size}%`}
 										</button>
@@ -483,7 +569,7 @@ export default function AppContent() {
 									type="button"
 									className={highContrast ? 'button button-primary' : 'button button-outline'}
 									aria-pressed={highContrast}
-									onClick={() => setHighContrast((enabled) => !enabled)}
+									onClick={() => updateAccessibility('highContrast', !highContrast)}
 								>
 									{highContrast ? 'Activado' : 'Activar contraste'}
 								</button>
@@ -497,20 +583,86 @@ export default function AppContent() {
 									type="button"
 									className={reducedMotion ? 'button button-primary' : 'button button-outline'}
 									aria-pressed={reducedMotion}
-									onClick={() => setReducedMotion((enabled) => !enabled)}
+									onClick={() => updateAccessibility('reducedMotion', !reducedMotion)}
 								>
 									{reducedMotion ? 'Activado' : 'Reducir movimiento'}
+								</button>
+							</section>
+							<section className="accessibility-control-card" aria-labelledby="font-title">
+								<div>
+									<h2 id="font-title">Fuente fácil de leer</h2>
+									<p>Usa una tipografía sans serif clara en todo el sitio.</p>
+								</div>
+								<button
+									type="button"
+									className={readableFont ? 'button button-primary' : 'button button-outline'}
+									aria-pressed={readableFont}
+									onClick={() => updateAccessibility('readableFont', !readableFont)}
+								>
+									{readableFont ? 'Activada' : 'Activar fuente'}
+								</button>
+							</section>
+							<section className="accessibility-control-card" aria-labelledby="links-title">
+								<div>
+									<h2 id="links-title">Subrayar enlaces</h2>
+									<p>Ayuda a distinguir los enlaces sin depender solo del color.</p>
+								</div>
+								<button
+									type="button"
+									className={underlineLinks ? 'button button-primary' : 'button button-outline'}
+									aria-pressed={underlineLinks}
+									onClick={() => updateAccessibility('underlineLinks', !underlineLinks)}
+								>
+									{underlineLinks ? 'Activado' : 'Subrayar enlaces'}
+								</button>
+							</section>
+							<section className="accessibility-control-card" aria-labelledby="focus-title">
+								<div>
+									<h2 id="focus-title">Resaltar navegación con teclado</h2>
+									<p>Marca con un contorno visible el control activo al usar Tab y Mayús+Tab.</p>
+								</div>
+								<button
+									type="button"
+									className={highlightFocus ? 'button button-primary' : 'button button-outline'}
+									aria-pressed={highlightFocus}
+									onClick={() => updateAccessibility('highlightFocus', !highlightFocus)}
+								>
+									{highlightFocus ? 'Activado' : 'Resaltar foco'}
+								</button>
+							</section>
+							<section className="accessibility-control-card" aria-labelledby="cursor-title">
+								<div>
+									<h2 id="cursor-title">Cursor grande</h2>
+									<p>Aumenta el tamaño del puntero para que sea más fácil localizarlo.</p>
+								</div>
+								<button
+									type="button"
+									className={largeCursor ? 'button button-primary' : 'button button-outline'}
+									aria-pressed={largeCursor}
+									onClick={() => updateAccessibility('largeCursor', !largeCursor)}
+								>
+									{largeCursor ? 'Activado' : 'Aumentar cursor'}
+								</button>
+							</section>
+							<section className="accessibility-control-card" aria-labelledby="spacing-title">
+								<div>
+									<h2 id="spacing-title">Más espacio al leer</h2>
+									<p>Aumenta el interlineado y el espacio entre letras del contenido.</p>
+								</div>
+								<button
+									type="button"
+									className={readingSpacing ? 'button button-primary' : 'button button-outline'}
+									aria-pressed={readingSpacing}
+									onClick={() => updateAccessibility('readingSpacing', !readingSpacing)}
+								>
+									{readingSpacing ? 'Activado' : 'Aumentar espacio'}
 								</button>
 							</section>
 						</div>
 						<button
 							type="button"
 							className="button button-quiet accessibility-reset"
-							onClick={() => {
-								setTextSize(100)
-								setHighContrast(false)
-								setReducedMotion(false)
-							}}
+							onClick={() => setAccessibility(DEFAULT_ACCESSIBILITY_PREFERENCES)}
 						>
 							Restablecer preferencias
 						</button>

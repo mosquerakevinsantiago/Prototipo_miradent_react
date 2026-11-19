@@ -14,6 +14,25 @@
   background: var(--paper);
 }
 
+.skip-to-content {
+  position: fixed;
+  z-index: 20;
+  top: 10px;
+  left: 10px;
+  padding: 12px 16px;
+  transform: translateY(-160%);
+  border: 2px solid var(--green-dark);
+  color: #fff;
+  background: var(--green-dark);
+  font-weight: 700;
+}
+.skip-to-content:focus {
+  transform: translateY(0);
+}
+.site-shell main:focus {
+  outline: none;
+}
+
 .site-header {
   width: min(1200px, calc(100% - 64px));
   min-height: 88px;
@@ -79,6 +98,27 @@
 .nav-link:hover,
 .nav-link.active {
   color: var(--green-dark);
+}
+.accessibility-icon-button {
+  width: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #cbd8d1;
+  border-radius: 50%;
+  color: var(--green-dark);
+  background: var(--mint);
+}
+.accessibility-icon-button svg {
+  width: 25px;
+  height: 25px;
+}
+.accessibility-icon-button:hover,
+.accessibility-icon-button.active {
+  border-color: var(--green);
+  color: var(--green-dark);
+  background: #d7e9de;
 }
 .nav-link.active::after {
   position: absolute;
@@ -1840,6 +1880,40 @@ button.booking-calendar-day:disabled {
   margin-top: 18px;
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+.accessibility-readable-font {
+  font-family: Arial, Verdana, sans-serif;
+}
+.accessibility-readable-font :is(h1, h2, h3, h4) {
+  font-family: Arial, Verdana, sans-serif;
+}
+.accessibility-underline-links a {
+  text-decoration: underline !important;
+  text-decoration-thickness: 2px !important;
+  text-underline-offset: 0.18em;
+}
+.accessibility-highlight-focus :is(button, input, select, textarea, a, [tabindex]):focus-visible {
+  outline: 4px solid #d400a6 !important;
+  outline-offset: 4px !important;
+  box-shadow: 0 0 0 7px #fff !important;
+}
+.accessibility-large-cursor,
+.accessibility-large-cursor * {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Cpath d='M8 3v29l8-8 6 12 5-2-6-12h11z' fill='white' stroke='black' stroke-width='2.5' stroke-linejoin='round'/%3E%3C/svg%3E")
+      4 3,
+    auto !important;
+}
+.accessibility-large-cursor :is(button, a, input, select, textarea, [role='button']) {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Cpath d='M8 3v29l8-8 6 12 5-2-6-12h11z' fill='white' stroke='black' stroke-width='2.5' stroke-linejoin='round'/%3E%3C/svg%3E")
+      4 3,
+    pointer !important;
+}
+.accessibility-reading-spacing :is(p, li, label, .form-intro, .hero-description, .admin-help) {
+  letter-spacing: 0.04em !important;
+  line-height: 1.9 !important;
+  word-spacing: 0.12em;
 }
 .site-shell.accessibility-high-contrast {
   --ink: #fff;
