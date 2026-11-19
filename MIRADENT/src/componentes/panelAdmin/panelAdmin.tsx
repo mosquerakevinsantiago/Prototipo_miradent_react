@@ -57,8 +57,7 @@ export default function PanelAdmin() {
 		removeAvailabilitySlot,
 		addAvailabilityBlock,
 		removeAvailabilityBlock,
-		addDentist,
-		updateDentist,
+		saveDentistWithAvailability,
 		removeDentist,
 		addSpecialty,
 		renameSpecialty,
@@ -99,6 +98,10 @@ export default function PanelAdmin() {
 		startTime: '08:00',
 		endTime: '18:00',
 	})
+	const [dentistScheduleMonth, setDentistScheduleMonth] = useState(() =>
+		getLocalDateString(new Date()).slice(0, 7),
+	)
+	const [dentistAvailableDates, setDentistAvailableDates] = useState<string[]>([])
 	const [specialtyMessage, setSpecialtyMessage] = useState('')
 	const [specialtyName, setSpecialtyName] = useState('')
 	const [editingSpecialty, setEditingSpecialty] = useState<string | null>(null)
@@ -112,6 +115,17 @@ export default function PanelAdmin() {
 		password: '',
 	})
 	const today = getLocalDateString(new Date())
+	const [dentistScheduleYear, dentistScheduleMonthNumber] = dentistScheduleMonth
+		.split('-')
+		.map(Number)
+	const dentistScheduleDaysInMonth = new Date(
+		dentistScheduleYear,
+		dentistScheduleMonthNumber,
+		0,
+	).getDate()
+	const dentistScheduleDates = Array.from({ length: dentistScheduleDaysInMonth }, (_, index) =>
+		getLocalDateString(new Date(dentistScheduleYear, dentistScheduleMonthNumber - 1, index + 1)),
+	)
 	const activeAppointments = appointments.filter(
 		(appointment) => appointment.status === 'Pendiente' || appointment.status === 'Confirmada',
 	)
@@ -271,13 +285,14 @@ export default function PanelAdmin() {
 	function handleAddDentist(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault()
 		try {
-			if (editingDentistId) {
-				updateDentist(editingDentistId, dentistForm)
-				setDentistMessage('Ficha de odontólogo actualizada correctamente.')
-			} else {
-				addDentist(dentistForm)
-				setDentistMessage('Odontólogo agregado correctamente.')
-			}
+			const publishedSlots = saveDentistWithAvailability(
+				editingDentistId,
+				dentistForm,
+				dentistAvailableDates,
+			)
+			setDentistMessage(
+				`${editingDentistId ? 'Ficha de odontólogo actualizada' : 'Odontólogo agregado'} correctamente. Se publicaron ${publishedSlots} horarios nuevos.`,
+			)
 			setEditingDentistId(null)
 			setDentistForm({
 				name: '',
@@ -285,9 +300,10 @@ export default function PanelAdmin() {
 				startTime: '08:00',
 				endTime: '18:00',
 			})
+			setDentistAvailableDates([])
 		} catch (reason) {
 			setDentistMessage(
-				reason instanceof Error ? reason.message : 'No se pudo agregar el odontólogo.',
+				reason instanceof Error ? reason.message : 'No se pudo guardar el odontólogo.',
 			)
 		}
 	}
@@ -296,11 +312,34 @@ export default function PanelAdmin() {
 		setEditingDentistId(dentist.id)
 		setDentistForm({
 			name: dentist.name,
-			specialties: dentist.specialties,
+			specialties: [dentist.specialties[0] ?? specialties[0] ?? ''],
 			startTime: dentist.startTime,
 			endTime: dentist.endTime,
 		})
+		const month = getLocalDateString(new Date()).slice(0, 7)
+		setDentistScheduleMonth(month)
+		setDentistAvailableDates(
+			availability
+				.filter(
+					(slot) =>
+						slot.dentistId === dentist.id && slot.date.startsWith(month) && slot.date >= today,
+				)
+				.map((slot) => slot.date)
+				.filter((date, index, dates) => dates.indexOf(date) === index),
+		)
 		setDentistMessage('')
+	}
+
+	function resetDentistForm() {
+		setEditingDentistId(null)
+		setDentistForm({
+			name: '',
+			specialties: [specialties[0] ?? 'Odontología general'],
+			startTime: '08:00',
+			endTime: '18:00',
+		})
+		setDentistScheduleMonth(getLocalDateString(new Date()).slice(0, 7))
+		setDentistAvailableDates([])
 	}
 
 	function handleRemoveDentist(id: string) {
@@ -852,8 +891,8 @@ export default function PanelAdmin() {
 						</div>
 					</div>
 					<p className="admin-help">
-						Registra los odontólogos, sus especialidades y su jornada. La clínica atiende de 08:00 a
-						12:00 y de 13:30 a 18:00.
+						Registra o edita especialidades y jornada, selecciona las fechas disponibles del
+						odontólogo y confirma todo junto. Los turnos publicados anteriormente se conservan.
 					</p>
 					<form className="admin-inline-form dentist-form" onSubmit={handleAddDentist}>
 						<label>
@@ -868,29 +907,27 @@ export default function PanelAdmin() {
 							/>
 						</label>
 						<label>
-							Especialidades
+							Especialidad del odontólogo
 							<select
-								multiple
-								size={specialties.length}
-								value={dentistForm.specialties}
-								onChange={(event) => {
-									const selectedSpecialties = Array.from(
-										event.currentTarget.selectedOptions,
-										(option) => option.value,
-									)
+								value={dentistForm.specialties[0] ?? ''}
+								onChange={(event) =>
 									setDentistForm((current) => ({
 										...current,
-										specialties: selectedSpecialties,
+										specialties: event.target.value ? [event.target.value] : [],
 									}))
-								}}
+								}
+								required
 							>
+								<option value="" disabled>
+									Selecciona una especialidad
+								</option>
 								{specialties.map((specialty) => (
 									<option key={specialty} value={specialty}>
 										{specialty}
 									</option>
 								))}
 							</select>
-							<small>Usa Ctrl (Windows) para seleccionar más de una.</small>
+							<small>Cada odontólogo queda asignado a una sola especialidad.</small>
 						</label>
 						<label>
 							Desde
@@ -918,6 +955,54 @@ export default function PanelAdmin() {
 								required
 							/>
 						</label>
+						<label className="dentist-month-field">
+							Mes de disponibilidad
+							<input
+								type="month"
+								min={today.slice(0, 7)}
+								value={dentistScheduleMonth}
+								onChange={(event) => {
+									setDentistScheduleMonth(event.target.value)
+									setDentistAvailableDates([])
+								}}
+								required
+							/>
+						</label>
+						<fieldset className="dentist-date-picker">
+							<legend>Fechas disponibles</legend>
+							<p>Marca los días en que este odontólogo atenderá durante el mes elegido.</p>
+							<div className="dentist-date-grid">
+								{dentistScheduleDates.map((date) => {
+									const disabled = date < today
+									return (
+										<label
+											key={date}
+											className={disabled ? 'dentist-date-option is-past' : 'dentist-date-option'}
+										>
+											<input
+												type="checkbox"
+												checked={dentistAvailableDates.includes(date)}
+												disabled={disabled}
+												onChange={(event) =>
+													setDentistAvailableDates((current) =>
+														event.target.checked
+															? [...current, date].sort()
+															: current.filter((selectedDate) => selectedDate !== date),
+													)
+												}
+											/>
+											<span>
+												{new Date(`${date}T00:00:00`).toLocaleDateString('es', {
+													weekday: 'short',
+												})}
+											</span>
+											<strong>{Number(date.slice(-2))}</strong>
+										</label>
+									)
+								})}
+							</div>
+							<small>{dentistAvailableDates.length} fechas seleccionadas</small>
+						</fieldset>
 						<button
 							className="button button-primary"
 							type="submit"
@@ -926,19 +1011,7 @@ export default function PanelAdmin() {
 							{editingDentistId ? 'Guardar cambios' : 'Agregar odontólogo'}
 						</button>
 						{editingDentistId && (
-							<button
-								className="button button-quiet"
-								type="button"
-								onClick={() => {
-									setEditingDentistId(null)
-									setDentistForm({
-										name: '',
-										specialties: [specialties[0] ?? 'Odontología general'],
-										startTime: '08:00',
-										endTime: '18:00',
-									})
-								}}
-							>
+							<button className="button button-quiet" type="button" onClick={resetDentistForm}>
 								Cancelar edición
 							</button>
 						)}

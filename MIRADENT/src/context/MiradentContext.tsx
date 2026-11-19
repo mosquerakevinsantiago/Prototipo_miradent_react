@@ -137,6 +137,11 @@ type MiradentContextValue = {
 	removeAvailabilityBlock: (id: string) => void
 	addDentist: (dentist: Omit<Dentist, 'id'>) => void
 	updateDentist: (id: string, dentist: Omit<Dentist, 'id'>) => void
+	saveDentistWithAvailability: (
+		id: string | null,
+		dentist: Omit<Dentist, 'id'>,
+		dates: string[],
+	) => number
 	removeDentist: (id: string) => void
 	addSpecialty: (specialty: string) => void
 	renameSpecialty: (oldSpecialty: string, newSpecialty: string) => void
@@ -158,7 +163,7 @@ const DEFAULT_DENTISTS: Dentist[] = [
 	{
 		id: '2',
 		name: 'Dra. María',
-		specialties: ['Odontología general', 'Endodoncia'],
+		specialties: ['Odontología general'],
 		startTime: '08:00',
 		endTime: '18:00',
 	},
@@ -172,7 +177,7 @@ const DEFAULT_DENTISTS: Dentist[] = [
 	{
 		id: '4',
 		name: 'Dr. Daniel',
-		specialties: ['Periodoncia', 'Odontopediatría'],
+		specialties: ['Odontopediatría'],
 		startTime: '08:00',
 		endTime: '18:00',
 	},
@@ -342,11 +347,11 @@ function loadData(): StoredData {
 								: {
 										...legacyDentist,
 										id,
-										specialties:
-											legacyDentist.specialties ??
-											(legacyDentist.specialty
-												? [legacyDentist.specialty]
-												: [DEFAULT_SPECIALTIES[0]]),
+										specialties: [
+											legacyDentist.specialties?.[0] ??
+												legacyDentist.specialty ??
+												DEFAULT_SPECIALTIES[0],
+										],
 									}
 						})
 					: []
@@ -985,10 +990,10 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 		const name = details.name.trim()
 		if (!name) throw new Error('Escribe el nombre del odontólogo.')
 		if (
-			details.specialties.length === 0 ||
+			details.specialties.length !== 1 ||
 			details.specialties.some((specialty) => !data.specialties.includes(specialty))
 		)
-			throw new Error('Selecciona al menos una especialidad válida.')
+			throw new Error('Asigna exactamente una especialidad válida al odontólogo.')
 		if (
 			details.startTime < '08:00' ||
 			details.endTime > '18:00' ||
@@ -1015,10 +1020,10 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 		)
 			throw new Error('Ya existe un odontólogo con ese nombre.')
 		if (
-			details.specialties.length === 0 ||
+			details.specialties.length !== 1 ||
 			details.specialties.some((specialty) => !data.specialties.includes(specialty))
 		)
-			throw new Error('Selecciona al menos una especialidad válida.')
+			throw new Error('Asigna exactamente una especialidad válida al odontólogo.')
 		if (
 			details.startTime < '08:00' ||
 			details.endTime > '18:00' ||
@@ -1029,6 +1034,97 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 			...current,
 			dentists: current.dentists.map((item) => (item.id === id ? { ...details, name, id } : item)),
 		}))
+	}
+
+	function saveDentistWithAvailability(
+		id: string | null,
+		details: Omit<Dentist, 'id'>,
+		dates: string[],
+	) {
+		const name = details.name.trim()
+		if (!name) throw new Error('Escribe el nombre del odontólogo.')
+		const existingDentist = id ? data.dentists.find((dentist) => dentist.id === id) : null
+		if (id && !existingDentist) throw new Error('No se encontró la ficha del odontólogo.')
+		if (
+			data.dentists.some(
+				(dentist) => dentist.id !== id && dentist.name.toLowerCase() === name.toLowerCase(),
+			)
+		)
+			throw new Error('Ya existe un odontólogo con ese nombre.')
+		if (
+			details.specialties.length !== 1 ||
+			details.specialties.some((specialty) => !data.specialties.includes(specialty))
+		)
+			throw new Error('Asigna exactamente una especialidad válida al odontólogo.')
+		if (
+			details.startTime < '08:00' ||
+			details.endTime > '18:00' ||
+			details.startTime >= details.endTime
+		)
+			throw new Error('El horario debe estar dentro de 08:00 a 18:00.')
+
+		const uniqueDates = [...new Set(dates)]
+		const today = getLocalDateString(new Date())
+		if (uniqueDates.some((date) => !isValidDateString(date) || date < today))
+			throw new Error('Selecciona únicamente fechas válidas de hoy en adelante.')
+
+		const dentistId = id ?? crypto.randomUUID()
+		const dentist: Dentist = { ...details, name, id: dentistId }
+		const existingSlots = new Set(
+			data.availability.map((slot) => `${slot.date}|${slot.time}|${slot.dentistId}`),
+		)
+		const clinicBlocks = [
+			[8 * 60, 12 * 60],
+			[13 * 60 + 30, 18 * 60],
+		]
+		const newSlots: AvailabilitySlot[] = []
+
+		for (const date of uniqueDates) {
+			for (const [blockStart, blockEnd] of clinicBlocks) {
+				for (let start = blockStart; start + 30 <= blockEnd; start += 30) {
+					if (start < toMinutes(dentist.startTime) || start >= toMinutes(dentist.endTime)) continue
+					const time = toTimeString(start)
+					if (date === today && new Date(`${date}T${time}:00`) <= new Date()) continue
+					if (
+						data.availabilityBlocks.some(
+							(block) =>
+								block.date === date &&
+								(!block.dentistId || block.dentistId === dentistId) &&
+								overlaps(start, start + 30, toMinutes(block.startTime), toMinutes(block.endTime)),
+						)
+					)
+						continue
+					if (
+						data.appointments.some(
+							(appointment) =>
+								appointment.date === date &&
+								appointment.dentistId === dentistId &&
+								appointment.status !== 'Cancelada' &&
+								overlaps(
+									start,
+									start + 30,
+									toMinutes(appointment.time),
+									toMinutes(appointment.endTime),
+								),
+						)
+					)
+						continue
+					const slotKey = `${date}|${time}|${dentistId}`
+					if (existingSlots.has(slotKey)) continue
+					existingSlots.add(slotKey)
+					newSlots.push({ id: crypto.randomUUID(), date, time, dentistId })
+				}
+			}
+		}
+
+		setData((current) => ({
+			...current,
+			dentists: id
+				? current.dentists.map((item) => (item.id === id ? dentist : item))
+				: [...current.dentists, dentist],
+			availability: [...current.availability, ...newSlots],
+		}))
+		return newSlots.length
 	}
 
 	function removeDentist(id: string) {
@@ -1129,6 +1225,7 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 				removeAvailabilityBlock,
 				addDentist,
 				updateDentist,
+				saveDentistWithAvailability,
 				removeDentist,
 				addSpecialty,
 				renameSpecialty,

@@ -44,6 +44,8 @@ See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rule
 - Filtrado de odontólogos por especialidad y validación de jornada, almuerzo y cierre.
 - Acceso de pacientes y administración desde el mismo formulario de inicio de sesión; el rol de la cuenta dirige a su espacio.
 - Administración de la agenda en vista de calendario mensual filtrada por especialidad y odontólogo, con detalle diario para revisar o retirar turnos.
+- Selección de fechas disponibles del odontólogo en el mismo formulario de edición de especialidades; los horarios se publican junto con los cambios de su ficha.
+- Cada odontólogo queda asignado a una sola especialidad, utilizada para filtrar los tratamientos y turnos que puede atender.
 - Publicación de disponibilidad mensual por especialidad, odontólogo y días de atención, con turnos cada 30 minutos y bloqueo automático del almuerzo.
 - Bloqueos por fecha y rango de horas para un odontólogo o toda la clínica; las reservas no permiten cruces con citas ya registradas.
 - Reserva por tratamiento y mes, con estado real de agenda por odontólogo, próximo día con cupos, cantidad de horarios, fechas y horas disponibles.

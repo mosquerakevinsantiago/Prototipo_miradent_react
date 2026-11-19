@@ -99,18 +99,6 @@ export default function AppContent() {
 		})
 	})
 
-	function handleLogin(event: FormEvent<HTMLFormElement>) {
-		event.preventDefault()
-		const form = new FormData(event.currentTarget)
-		const user = login(String(form.get('email')), String(form.get('password')))
-		if (!user) {
-			setLoginError('El correo o la contraseña no son correctos.')
-			return
-		}
-		setLoginError('')
-		setView(user.role === 'admin' ? 'admin' : 'citas')
-	}
-
 	function navigate(nextView: View) {
 		setLoginError('')
 		if (nextView === 'admin' && currentUser?.role !== 'admin') {
@@ -152,6 +140,18 @@ export default function AppContent() {
 		value: AccessibilityPreferences[K],
 	) {
 		setAccessibility((current) => ({ ...current, [key]: value }))
+	}
+
+	function handleLogin(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault()
+		const form = new FormData(event.currentTarget)
+		const user = login(String(form.get('email')), String(form.get('password')))
+		if (!user) {
+			setLoginError('El correo o la contraseña no son correctos.')
+			return
+		}
+		setLoginError('')
+		setView(user.role === 'admin' ? 'admin' : 'citas')
 	}
 
 	return (
@@ -481,8 +481,8 @@ export default function AppContent() {
 						<p className="eyebrow">Acceso MIRADENT</p>
 						<h1>Iniciar sesión</h1>
 						<p className="form-intro">
-							Pacientes y administradores ingresan desde este mismo acceso. El sistema abrirá el
-							espacio correspondiente a tu cuenta.
+							Acceso de demostración local. No uses credenciales reales; esta versión no conecta con
+							el backend ni es adecuada para datos clínicos reales.
 						</p>
 						<form className="form-grid" onSubmit={handleLogin}>
 							<label>
