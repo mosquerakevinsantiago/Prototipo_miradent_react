@@ -67,7 +67,7 @@ npm run build
 
 **Nota académica:** la aplicación sigue utilizando `localStorage` como almacenamiento del navegador; no equivale todavía a una base de datos centralizada con backend y los cambios no se comparten entre dispositivos. Las validaciones del navegador son para demostración y no protegen contra reservas simultáneas en diferentes dispositivos. Para producción, se requiere implementar y conectar un backend.
 
-Los odontólogos A y K son registros de referencia y deben reemplazarse por los nombres reales. La disponibilidad mensual se guarda como turnos fechados y debe publicarse por cada odontólogo y especialidad desde Administración > Horarios.
+Los odontólogos de ejemplo corresponden a los IDs indicados en el catálogo local (2, 3, 4, 6 y 28–32) y sus especialidades. La disponibilidad mensual se guarda como turnos fechados y debe publicarse por cada odontólogo y especialidad desde Administración > Horarios.
 
 Las duraciones de ejemplo de los servicios —excepto Endodoncia, configurada en 90 minutos según el requisito— son provisionales y deben verificarse con la clínica.
 

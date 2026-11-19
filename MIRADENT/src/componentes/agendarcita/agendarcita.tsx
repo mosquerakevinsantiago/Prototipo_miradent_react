@@ -27,7 +27,7 @@ export default function AgendarCita() {
 	const [selectedMonth, setSelectedMonth] = useState(today.slice(0, 7))
 	const selectedServiceDetails = services.find((service) => service.name === selectedService)
 	const dentistsForService = selectedServiceDetails
-		? dentists.filter((dentist) => dentist.specialty === selectedServiceDetails.specialty)
+		? dentists.filter((dentist) => dentist.specialties.includes(selectedServiceDetails.specialty))
 		: dentists
 	const availableSlots = availableSlotsForService(selectedService).sort((first, second) =>
 		`${first.date}${first.time}`.localeCompare(`${second.date}${second.time}`),
@@ -181,7 +181,8 @@ export default function AgendarCita() {
 										<span className="booking-provider-info">
 											<strong>{dentist.name}</strong>
 											<small>
-												{dentist.specialty} · {dentist.startTime}–{dentist.endTime}
+												ID {dentist.id} · {dentist.specialties.join(', ')} · {dentist.startTime}–
+												{dentist.endTime}
 											</small>
 											<small>
 												{isAvailable

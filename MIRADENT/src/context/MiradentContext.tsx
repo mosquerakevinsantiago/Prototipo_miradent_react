@@ -39,7 +39,7 @@ export type Service = {
 export type Dentist = {
 	id: string
 	name: string
-	specialty: string
+	specialties: string[]
 	startTime: string
 	endTime: string
 }
@@ -73,6 +73,7 @@ type StoredData = {
 	appointments: Appointment[]
 	currentUserId: string | null
 	serviceCatalogVersion: number
+	dentistCatalogVersion: number
 	services: Service[]
 	availability: AvailabilitySlot[]
 	availabilityBlocks: AvailabilityBlock[]
@@ -136,6 +137,7 @@ type MiradentContextValue = {
 
 const STORAGE_KEY = 'miradent-data-v1'
 const SERVICE_CATALOG_VERSION = 1
+const DENTIST_CATALOG_VERSION = 1
 const DEFAULT_SPECIALTIES = [
 	'Odontología general',
 	'Ortodoncia',
@@ -146,16 +148,65 @@ const DEFAULT_SPECIALTIES = [
 ]
 const DEFAULT_DENTISTS: Dentist[] = [
 	{
-		id: 'dentist-a',
-		name: 'Odontólogo A',
-		specialty: 'Odontología general',
+		id: '2',
+		name: 'Dra. María',
+		specialties: ['Odontología general', 'Endodoncia'],
 		startTime: '08:00',
 		endTime: '18:00',
 	},
 	{
-		id: 'dentist-k',
-		name: 'Odontólogo K',
-		specialty: 'Odontología general',
+		id: '3',
+		name: 'Dr. Andrés',
+		specialties: ['Odontología general'],
+		startTime: '08:00',
+		endTime: '18:00',
+	},
+	{
+		id: '4',
+		name: 'Dr. Daniel',
+		specialties: ['Periodoncia', 'Odontopediatría'],
+		startTime: '08:00',
+		endTime: '18:00',
+	},
+	{
+		id: '6',
+		name: 'Dr. Felipe',
+		specialties: ['Rehabilitación oral'],
+		startTime: '08:00',
+		endTime: '18:00',
+	},
+	{
+		id: '28',
+		name: 'Odontólogo',
+		specialties: ['Odontología general'],
+		startTime: '08:00',
+		endTime: '18:00',
+	},
+	{
+		id: '29',
+		name: 'Odontólogo',
+		specialties: ['Ortodoncia'],
+		startTime: '08:00',
+		endTime: '18:00',
+	},
+	{
+		id: '30',
+		name: 'Odontólogo',
+		specialties: ['Endodoncia'],
+		startTime: '08:00',
+		endTime: '18:00',
+	},
+	{
+		id: '31',
+		name: 'Odontólogo',
+		specialties: ['Periodoncia'],
+		startTime: '08:00',
+		endTime: '18:00',
+	},
+	{
+		id: '32',
+		name: 'Odontólogo',
+		specialties: ['Rehabilitación oral'],
 		startTime: '08:00',
 		endTime: '18:00',
 	},
@@ -216,6 +267,10 @@ function getServiceDuration(services: Service[], name: string) {
 	return services.find((service) => service.name === name)?.durationMinutes ?? 30
 }
 
+function dentistHasSpecialty(dentist: Dentist, specialty: string) {
+	return dentist.specialties.includes(specialty)
+}
+
 function hasFreeChair(appointments: Appointment[], date: string, start: number, end: number) {
 	return CHAIRS.some(
 		(chairId) =>
@@ -265,19 +320,60 @@ function loadData(): StoredData {
 							...DEFAULT_SERVICES.filter((service) => !savedServiceNames.has(service.name)),
 						]
 					: savedServices
+				const dentistIdMigration = new Map([
+					['dentist-a', '2'],
+					['dentist-k', '3'],
+				])
+				const savedDentists = Array.isArray(data.dentists)
+					? data.dentists.map((dentist) => {
+							const legacyDentist = dentist as Dentist & { specialty?: string }
+							const id = dentistIdMigration.get(legacyDentist.id) ?? legacyDentist.id
+							const defaultDentist = DEFAULT_DENTISTS.find((item) => item.id === id)
+							return defaultDentist
+								? defaultDentist
+								: {
+										...legacyDentist,
+										id,
+										specialties:
+											legacyDentist.specialties ??
+											(legacyDentist.specialty
+												? [legacyDentist.specialty]
+												: [DEFAULT_SPECIALTIES[0]]),
+									}
+						})
+					: []
+				const needsDentistCatalogMigration = data.dentistCatalogVersion !== DENTIST_CATALOG_VERSION
+				const dentists = needsDentistCatalogMigration
+					? [
+							...savedDentists.filter(
+								(dentist) =>
+									!DEFAULT_DENTISTS.some((defaultDentist) => defaultDentist.id === dentist.id),
+							),
+							...DEFAULT_DENTISTS,
+						]
+					: savedDentists.length > 0
+						? savedDentists
+						: DEFAULT_DENTISTS
+				const migratedDentistId = (id: string) => dentistIdMigration.get(id) ?? id
 				return {
 					accounts: data.accounts,
 					currentUserId: typeof data.currentUserId === 'string' ? data.currentUserId : null,
 					serviceCatalogVersion: SERVICE_CATALOG_VERSION,
+					dentistCatalogVersion: DENTIST_CATALOG_VERSION,
 					services,
 					availability: Array.isArray(data.availability)
 						? data.availability.map((slot) => ({
 								...slot,
-								dentistId: slot.dentistId ?? DEFAULT_DENTISTS[0].id,
+								dentistId: migratedDentistId(slot.dentistId ?? DEFAULT_DENTISTS[0].id),
 							}))
 						: [],
-					availabilityBlocks: Array.isArray(data.availabilityBlocks) ? data.availabilityBlocks : [],
-					dentists: Array.isArray(data.dentists) ? data.dentists : DEFAULT_DENTISTS,
+					availabilityBlocks: Array.isArray(data.availabilityBlocks)
+						? data.availabilityBlocks.map((block) => ({
+								...block,
+								dentistId: block.dentistId ? migratedDentistId(block.dentistId) : null,
+							}))
+						: [],
+					dentists,
 					specialties: [
 						...new Set([
 							...DEFAULT_SPECIALTIES,
@@ -289,8 +385,15 @@ function loadData(): StoredData {
 							appointment.durationMinutes ?? getServiceDuration(services, appointment.service)
 						return {
 							...appointment,
-							dentistId: appointment.dentistId ?? DEFAULT_DENTISTS[0].id,
-							dentistName: appointment.dentistName ?? DEFAULT_DENTISTS[0].name,
+							dentistId: migratedDentistId(appointment.dentistId ?? DEFAULT_DENTISTS[0].id),
+							dentistName:
+								dentists.find(
+									(dentist) =>
+										dentist.id ===
+										migratedDentistId(appointment.dentistId ?? DEFAULT_DENTISTS[0].id),
+								)?.name ??
+								appointment.dentistName ??
+								DEFAULT_DENTISTS[0].name,
 							durationMinutes,
 							endTime:
 								appointment.endTime ?? toTimeString(toMinutes(appointment.time) + durationMinutes),
@@ -309,6 +412,7 @@ function loadData(): StoredData {
 		appointments: [],
 		currentUserId: null,
 		serviceCatalogVersion: SERVICE_CATALOG_VERSION,
+		dentistCatalogVersion: DENTIST_CATALOG_VERSION,
 		services: DEFAULT_SERVICES,
 		availability: [],
 		availabilityBlocks: [],
@@ -425,7 +529,7 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 		if (!dentist) throw new Error('Selecciona un odontólogo válido.')
 		const service = data.services.find((item) => item.name === details.service)
 		if (!service) throw new Error('Ese servicio ya no está disponible. Selecciona otro.')
-		if (dentist.specialty !== service.specialty)
+		if (!dentistHasSpecialty(dentist, service.specialty))
 			throw new Error(
 				'El odontólogo seleccionado no tiene la especialidad requerida para este servicio.',
 			)
@@ -526,7 +630,7 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 		return data.availability.filter((slot) => {
 			if (new Date(`${slot.date}T${slot.time}:00`) <= new Date()) return false
 			const dentist = data.dentists.find((item) => item.id === slot.dentistId)
-			if (!dentist || dentist.specialty !== service.specialty) return false
+			if (!dentist || !dentistHasSpecialty(dentist, service.specialty)) return false
 			const start = toMinutes(slot.time)
 			const end = start + service.durationMinutes
 			if (
@@ -820,6 +924,11 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 		const name = details.name.trim()
 		if (!name) throw new Error('Escribe el nombre del odontólogo.')
 		if (
+			details.specialties.length === 0 ||
+			details.specialties.some((specialty) => !data.specialties.includes(specialty))
+		)
+			throw new Error('Selecciona al menos una especialidad válida.')
+		if (
 			details.startTime < '08:00' ||
 			details.endTime > '18:00' ||
 			details.startTime >= details.endTime
@@ -836,6 +945,11 @@ export function MiradentProvider({ children }: { children: ReactNode }) {
 	function updateDentist(id: string, details: Omit<Dentist, 'id'>) {
 		const name = details.name.trim()
 		if (!name) throw new Error('Escribe el nombre del odontólogo.')
+		if (
+			details.specialties.length === 0 ||
+			details.specialties.some((specialty) => !data.specialties.includes(specialty))
+		)
+			throw new Error('Selecciona al menos una especialidad válida.')
 		if (
 			details.startTime < '08:00' ||
 			details.endTime > '18:00' ||

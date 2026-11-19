@@ -67,7 +67,7 @@ export default function PanelAdmin() {
 	)
 	const [scheduleSpecialty, setScheduleSpecialty] = useState(initialScheduleSpecialty)
 	const [scheduleDentistId, setScheduleDentistId] = useState(
-		dentists.find((dentist) => dentist.specialty === initialScheduleSpecialty)?.id ?? '',
+		dentists.find((dentist) => dentist.specialties.includes(initialScheduleSpecialty))?.id ?? '',
 	)
 	const [scheduleWeekdays, setScheduleWeekdays] = useState([1, 2, 3, 4, 5])
 	const [selectedScheduleDate, setSelectedScheduleDate] = useState(() =>
@@ -76,7 +76,7 @@ export default function PanelAdmin() {
 	const [dentistMessage, setDentistMessage] = useState('')
 	const [dentistForm, setDentistForm] = useState({
 		name: '',
-		specialty: specialties[0] ?? 'Odontología general',
+		specialties: [specialties[0] ?? 'Odontología general'],
 		startTime: '08:00',
 		endTime: '18:00',
 	})
@@ -113,7 +113,9 @@ export default function PanelAdmin() {
 	const sortedAvailability = [...availability].sort((first, second) =>
 		`${first.date}${first.time}`.localeCompare(`${second.date}${second.time}`),
 	)
-	const scheduleDentists = dentists.filter((dentist) => dentist.specialty === scheduleSpecialty)
+	const scheduleDentists = dentists.filter((dentist) =>
+		dentist.specialties.includes(scheduleSpecialty),
+	)
 	const availabilityForMonth = sortedAvailability.filter(
 		(slot) => slot.date.startsWith(scheduleMonth) && slot.dentistId === scheduleDentistId,
 	)
@@ -731,7 +733,7 @@ export default function PanelAdmin() {
 						</div>
 					</div>
 					<p className="admin-help">
-						Registra los odontólogos, su especialidad y su jornada. La clínica atiende de 08:00 a
+						Registra los odontólogos, sus especialidades y su jornada. La clínica atiende de 08:00 a
 						12:00 y de 13:30 a 18:00.
 					</p>
 					<form className="admin-inline-form dentist-form" onSubmit={handleAddDentist}>
@@ -747,17 +749,28 @@ export default function PanelAdmin() {
 							/>
 						</label>
 						<label>
-							Especialidad
+							Especialidades
 							<select
-								value={dentistForm.specialty}
+								multiple
+								size={specialties.length}
+								value={dentistForm.specialties}
 								onChange={(event) =>
-									setDentistForm((current) => ({ ...current, specialty: event.target.value }))
+									setDentistForm((current) => ({
+										...current,
+										specialties: Array.from(
+											event.currentTarget.selectedOptions,
+											(option) => option.value,
+										),
+									}))
 								}
 							>
 								{specialties.map((specialty) => (
-									<option key={specialty}>{specialty}</option>
+									<option key={specialty} value={specialty}>
+										{specialty}
+									</option>
 								))}
 							</select>
+							<small>Usa Ctrl (Windows) para seleccionar más de una.</small>
 						</label>
 						<label>
 							Desde
@@ -798,9 +811,11 @@ export default function PanelAdmin() {
 						{dentists.map((dentist) => (
 							<li key={dentist.id}>
 								<span>
-									<strong>{dentist.name}</strong>
+									<strong>
+										{dentist.name} · ID {dentist.id}
+									</strong>
 									<small>
-										{dentist.specialty} · {dentist.startTime} a {dentist.endTime}
+										{dentist.specialties.join(', ')} · {dentist.startTime} a {dentist.endTime}
 									</small>
 								</span>
 								<button
@@ -842,7 +857,7 @@ export default function PanelAdmin() {
 									const specialty = event.target.value
 									setScheduleSpecialty(specialty)
 									setScheduleDentistId(
-										dentists.find((dentist) => dentist.specialty === specialty)?.id ?? '',
+										dentists.find((dentist) => dentist.specialties.includes(specialty))?.id ?? '',
 									)
 								}}
 								required
@@ -867,7 +882,7 @@ export default function PanelAdmin() {
 								</option>
 								{scheduleDentists.map((dentist) => (
 									<option key={dentist.id} value={dentist.id}>
-										{dentist.name} · {dentist.startTime}–{dentist.endTime}
+										{dentist.name} · ID {dentist.id} · {dentist.startTime}–{dentist.endTime}
 									</option>
 								))}
 							</select>
@@ -935,7 +950,7 @@ export default function PanelAdmin() {
 								</option>
 								{dentists.map((dentist) => (
 									<option key={dentist.id} value={dentist.id}>
-										{dentist.name} ({dentist.startTime}–{dentist.endTime})
+										{dentist.name} · ID {dentist.id} ({dentist.startTime}–{dentist.endTime})
 									</option>
 								))}
 							</select>
