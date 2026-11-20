@@ -233,7 +233,6 @@ export default function AgendarCita() {
 										key={dentist.id}
 										type="button"
 										className={`booking-provider-card${selectedDentist === dentist.id ? ' selected' : ''}${!isAvailable ? ' unavailable' : ''}`}
-										disabled={!isAvailable}
 										aria-pressed={selectedDentist === dentist.id}
 										onClick={() => {
 											setSelectedDentist(dentist.id)
@@ -287,18 +286,11 @@ export default function AgendarCita() {
 						</p>
 					)}
 				</fieldset>
-				<fieldset
-					className="booking-date-picker"
-					disabled={!selectedDentist || datesForSelectedDentist.length === 0}
-				>
+				<fieldset className="booking-date-picker" disabled={!selectedDentist}>
 					<legend>Agenda del odontólogo — selecciona un día disponible</legend>
 					{!selectedDentist ? (
 						<p className="booking-empty">
 							Selecciona un odontólogo disponible para consultar su agenda mensual.
-						</p>
-					) : datesForSelectedDentist.length === 0 ? (
-						<p className="booking-empty">
-							Este odontólogo no tiene horarios disponibles en el mes seleccionado.
 						</p>
 					) : (
 						<>
@@ -309,8 +301,13 @@ export default function AgendarCita() {
 										year: 'numeric',
 									})}
 								</strong>
-								<span>Los días verdes tienen horarios disponibles</span>
+								<span>Verde: disponible · Gris: no disponible</span>
 							</div>
+							{datesForSelectedDentist.length === 0 && (
+								<p className="booking-empty">
+									Este odontólogo no tiene horarios disponibles en el mes seleccionado.
+								</p>
+							)}
 							<div className="booking-calendar-weekdays" aria-hidden="true">
 								{['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((day) => (
 									<span key={day}>{day}</span>
@@ -344,11 +341,11 @@ export default function AgendarCita() {
 												}}
 											>
 												<strong>{Number(date.slice(-2))}</strong>
-												{hasAvailability && (
-													<small>
-														{dateSlots.length} {dateSlots.length === 1 ? 'hora' : 'horas'}
-													</small>
-												)}
+												<small>
+													{hasAvailability
+														? `${dateSlots.length} ${dateSlots.length === 1 ? 'hora' : 'horas'}`
+														: 'No disponible'}
+												</small>
 											</button>
 										)
 									}),
@@ -363,26 +360,37 @@ export default function AgendarCita() {
 				>
 					<legend>Horas disponibles</legend>
 					{timesForSelectedDate.length === 0 ? (
-						<p className="booking-empty">Selecciona una fecha para ver sus horas.</p>
+						<p className="booking-empty">Selecciona un día disponible para consultar sus horas.</p>
 					) : (
-						<div className="booking-time-options">
-							{timesForSelectedDate.map((slot) => (
-								<button
-									key={slot.id}
-									type="button"
-									className={
-										selectedTime === slot.time ? 'booking-option selected' : 'booking-option'
-									}
-									aria-pressed={selectedTime === slot.time}
-									onClick={() => {
-										setSelectedTime(slot.time)
-										setMessage('')
-									}}
-								>
-									{slot.time}
-								</button>
-							))}
-						</div>
+						<>
+							<p className="booking-empty">
+								Horarios disponibles para{' '}
+								{new Date(`${selectedDate}T00:00:00`).toLocaleDateString('es', {
+									weekday: 'long',
+									day: 'numeric',
+									month: 'long',
+								})}
+								:
+							</p>
+							<div className="booking-time-options">
+								{timesForSelectedDate.map((slot) => (
+									<button
+										key={slot.id}
+										type="button"
+										className={
+											selectedTime === slot.time ? 'booking-option selected' : 'booking-option'
+										}
+										aria-pressed={selectedTime === slot.time}
+										onClick={() => {
+											setSelectedTime(slot.time)
+											setMessage('')
+										}}
+									>
+										{slot.time}
+									</button>
+								))}
+							</div>
+						</>
 					)}
 				</fieldset>
 				<label className="wide-field">

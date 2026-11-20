@@ -3,7 +3,36 @@ import { AgendarCita, PanelAdmin, RegistroUsuario } from '../componentes'
 import { useMiradent } from '../context'
 import '../App.css'
 
-type View = 'inicio' | 'login' | 'registro' | 'citas' | 'admin' | 'accesibilidad'
+type View =
+	| 'inicio'
+	| 'nosotros'
+	| 'servicios'
+	| 'contacto'
+	| 'login'
+	| 'registro'
+	| 'citas'
+	| 'admin'
+	| 'accesibilidad'
+const VIEW_PATHS: Record<View, string> = {
+	inicio: '/inicio',
+	nosotros: '/nosotros',
+	servicios: '/servicios',
+	contacto: '/contacto',
+	login: '/login',
+	registro: '/registro',
+	citas: '/citas',
+	admin: '/admin',
+	accesibilidad: '/accesibilidad',
+}
+
+function getViewFromPath(pathname: string): View {
+	const normalizedPath = pathname.replace(/\/+$/, '') || '/'
+	return (
+		(Object.entries(VIEW_PATHS).find(([, path]) => path === normalizedPath)?.[0] as
+			View | undefined) ?? 'inicio'
+	)
+}
+
 type AccessibilityPreferences = {
 	textSize: 100 | 110 | 125 | 150
 	highContrast: boolean
@@ -48,10 +77,9 @@ function loadAccessibilityPreferences(): AccessibilityPreferences {
 
 export default function AppContent() {
 	const { currentUser, login, logout } = useMiradent()
-	const [view, setView] = useState<View>('inicio')
+	const [view, setView] = useState<View>(() => getViewFromPath(window.location.pathname))
 	const [loginError, setLoginError] = useState('')
 	const [accessibility, setAccessibility] = useState(loadAccessibilityPreferences)
-	const sectionToScroll = useRef<string | null>(null)
 	const accessibilityShell = useRef<HTMLDivElement>(null)
 	const {
 		textSize,
@@ -73,9 +101,34 @@ export default function AppContent() {
 	}, [accessibility])
 
 	useEffect(() => {
-		if (view !== 'inicio' || !sectionToScroll.current) return
-		document.getElementById(sectionToScroll.current)?.scrollIntoView({ behavior: 'smooth' })
-		sectionToScroll.current = null
+		const syncViewWithPath = () => {
+			const path = window.location.pathname.replace(/\/+$/, '') || '/'
+			const nextView = getViewFromPath(path)
+			const guardedView =
+				(nextView === 'admin' && currentUser?.role !== 'admin') ||
+				(nextView === 'citas' && !currentUser)
+					? 'login'
+					: nextView
+			if (path !== VIEW_PATHS[guardedView]) {
+				window.history.replaceState(null, '', VIEW_PATHS[guardedView])
+			}
+			setLoginError('')
+			setView(guardedView)
+		}
+		const currentPath = window.location.pathname.replace(/\/+$/, '') || '/'
+		if (!Object.values(VIEW_PATHS).includes(currentPath)) {
+			window.history.replaceState(null, '', VIEW_PATHS[getViewFromPath(currentPath)])
+		}
+		if (currentPath === '/') {
+			window.history.replaceState(null, '', VIEW_PATHS.inicio)
+		}
+		window.addEventListener('popstate', syncViewWithPath)
+		return () => window.removeEventListener('popstate', syncViewWithPath)
+	}, [currentUser])
+
+	useEffect(() => {
+		window.scrollTo(0, 0)
+		document.getElementById('main-content')?.focus()
 	}, [view])
 
 	useEffect(() => {
@@ -99,32 +152,27 @@ export default function AppContent() {
 		})
 	})
 
-	function navigate(nextView: View) {
+	function navigate(nextView: View, allowUnauthenticated = false) {
 		setLoginError('')
-		if (nextView === 'admin' && currentUser?.role !== 'admin') {
-			setView('login')
-			return
+		const targetView =
+			!allowUnauthenticated &&
+			((nextView === 'admin' && currentUser?.role !== 'admin') ||
+				(nextView === 'citas' && !currentUser))
+				? 'login'
+				: nextView
+		if (window.location.pathname !== VIEW_PATHS[targetView]) {
+			window.history.pushState(null, '', VIEW_PATHS[targetView])
 		}
-		if (nextView === 'citas' && !currentUser) {
-			setView('login')
-			return
-		}
-		setView(nextView)
+		setView(targetView)
 	}
 
 	function handleLogout() {
 		logout()
-		setView('inicio')
+		navigate('inicio')
 	}
 
-	function goToSection(section: string) {
-		setLoginError('')
-		if (view === 'inicio') {
-			document.getElementById(section)?.scrollIntoView({ behavior: 'smooth' })
-			return
-		}
-		sectionToScroll.current = section
-		setView('inicio')
+	function navigateHomeView(nextView: 'inicio' | 'nosotros' | 'servicios' | 'contacto') {
+		navigate(nextView)
 	}
 
 	function goToAppointment() {
@@ -151,7 +199,7 @@ export default function AppContent() {
 			return
 		}
 		setLoginError('')
-		setView(user.role === 'admin' ? 'admin' : 'citas')
+		navigate(user.role === 'admin' ? 'admin' : 'citas', true)
 	}
 
 	return (
@@ -177,7 +225,7 @@ export default function AppContent() {
 				<button
 					type="button"
 					className="brand"
-					onClick={() => goToSection('inicio')}
+					onClick={() => navigateHomeView('inicio')}
 					aria-label="Miradent, inicio"
 				>
 					<span className="brand-mark" aria-hidden="true">
@@ -188,19 +236,39 @@ export default function AppContent() {
 					</span>
 				</button>
 				<nav className="main-nav" aria-label="Navegación principal">
-					<button type="button" className="nav-link" onClick={() => goToSection('inicio')}>
+					<button
+						type="button"
+						className={`nav-link${view === 'inicio' ? ' active' : ''}`}
+						onClick={() => navigateHomeView('inicio')}
+						aria-current={view === 'inicio' ? 'page' : undefined}
+					>
 						Inicio
 					</button>
-					<button type="button" className="nav-link" onClick={() => goToSection('nosotros')}>
+					<button
+						type="button"
+						className={`nav-link${view === 'nosotros' ? ' active' : ''}`}
+						onClick={() => navigateHomeView('nosotros')}
+						aria-current={view === 'nosotros' ? 'page' : undefined}
+					>
 						Nosotros
 					</button>
-					<button type="button" className="nav-link" onClick={() => goToSection('servicios')}>
+					<button
+						type="button"
+						className={`nav-link${view === 'servicios' ? ' active' : ''}`}
+						onClick={() => navigateHomeView('servicios')}
+						aria-current={view === 'servicios' ? 'page' : undefined}
+					>
 						Servicios
 					</button>
 					<button type="button" className="nav-link" onClick={goToAppointment}>
 						Agenda tu cita
 					</button>
-					<button type="button" className="nav-link" onClick={() => goToSection('contacto')}>
+					<button
+						type="button"
+						className={`nav-link${view === 'contacto' ? ' active' : ''}`}
+						onClick={() => navigateHomeView('contacto')}
+						aria-current={view === 'contacto' ? 'page' : undefined}
+					>
 						Contáctanos
 					</button>
 					<button
@@ -282,132 +350,132 @@ export default function AppContent() {
 
 			<main id="main-content" tabIndex={-1}>
 				{view === 'inicio' && (
-					<>
-						<section className="home-hero" id="inicio">
-							<div className="hero-copy">
-								<p className="eyebrow">Cuidamos de tu sonrisa</p>
-								<h1>
-									Una sonrisa sana
-									<br />
-									empieza aquí.
-								</h1>
-								<p className="hero-description">
-									Atención dental cercana, información clara y un equipo que te acompaña para cuidar
-									tu salud bucal.
-								</p>
-								<div className="hero-actions">
-									<button type="button" className="button button-primary" onClick={goToAppointment}>
-										Agenda tu cita <span aria-hidden="true">↗</span>
-									</button>
-									<button
-										type="button"
-										className="button button-quiet"
-										onClick={() => navigate('login')}
-									>
-										Acceso de pacientes
-									</button>
-								</div>
-								<div className="hero-trust">
-									<span aria-hidden="true">✳</span> Cuidado dental para toda la familia
-								</div>
-							</div>
-							<div className="hero-photo">
-								<img
-									src="https://images.unsplash.com/photo-1606811971618-4486d14f3f99?auto=format&fit=crop&w=1100&q=85"
-									alt="Profesional de odontología atendiendo a una paciente"
-									fetchPriority="high"
-								/>
-							</div>
-						</section>
-
-						<section className="info-section about-section" id="nosotros">
-							<div className="section-photo">
-								<img
-									src="https://images.unsplash.com/photo-1609840114035-3c981b782dfe?auto=format&fit=crop&w=1000&q=85"
-									alt="Atención dental en un consultorio"
-									loading="lazy"
-								/>
-							</div>
-							<div className="section-copy">
-								<p className="eyebrow">Nosotros</p>
-								<h2>Tu salud bucal, con atención cercana.</h2>
-								<p>
-									En Miradent creemos que una buena atención comienza escuchándote. Queremos que
-									comprendas tus opciones y participes en las decisiones sobre tu cuidado dental.
-								</p>
-								<p>
-									La prevención y las revisiones periódicas ayudan a detectar problemas a tiempo.
-									Cada plan de tratamiento debe adaptarse a las necesidades de cada persona y ser
-									evaluado por un profesional.
-								</p>
-								<a
-									className="source-link"
-									href="https://www.who.int/news-room/fact-sheets/detail/oral-health"
-									target="_blank"
-									rel="noreferrer"
-								>
-									Fuente de salud: Organización Mundial de la Salud ↗
-								</a>
-							</div>
-						</section>
-
-						<section className="services-section" id="servicios">
-							<div className="services-intro">
-								<p className="eyebrow">Servicios</p>
-								<h2>Atención para cada etapa de tu sonrisa.</h2>
-								<p>
-									Conoce algunas áreas habituales de la atención odontológica. La valoración
-									profesional determina qué cuidado es adecuado en cada caso.
-								</p>
-							</div>
-							<div className="service-feature">
-								<img
-									src="https://images.unsplash.com/photo-1606811841689-23dfddce3e95?auto=format&fit=crop&w=1200&q=85"
-									alt="Odontóloga conversando con una paciente durante una consulta"
-									loading="lazy"
-								/>
-								<div className="service-list">
-									<article>
-										<span>01</span>
-										<div>
-											<h3>Revisión y prevención</h3>
-											<p>
-												Evaluación de la salud bucal, orientación de higiene y seguimiento
-												preventivo.
-											</p>
-										</div>
-									</article>
-									<article>
-										<span>02</span>
-										<div>
-											<h3>Limpieza dental</h3>
-											<p>
-												Atención profesional para ayudar a mantener dientes y encías saludables.
-											</p>
-										</div>
-									</article>
-									<article>
-										<span>03</span>
-										<div>
-											<h3>Odontología restauradora</h3>
-											<p>Valoración y opciones para tratar caries o reparar piezas dentales.</p>
-										</div>
-									</article>
-									<article>
-										<span>04</span>
-										<div>
-											<h3>Estética dental</h3>
-											<p>Consulta sobre alternativas estéticas según tu salud y tus objetivos.</p>
-										</div>
-									</article>
-								</div>
-							</div>
-							<p className="medical-note">
-								Los tratamientos y resultados dependen de una evaluación individual. Esta
-								información es general y no sustituye una consulta odontológica.
+					<section className="home-hero" id="inicio">
+						<div className="hero-copy">
+							<p className="eyebrow">Cuidamos de tu sonrisa</p>
+							<h1>
+								Una sonrisa sana
+								<br />
+								empieza aquí.
+							</h1>
+							<p className="hero-description">
+								Atención dental cercana, información clara y un equipo que te acompaña para cuidar
+								tu salud bucal.
 							</p>
-						</section>
-
+							<div className="hero-actions">
+								<button type="button" className="button button-primary" onClick={goToAppointment}>
+									Agenda tu cita <span aria-hidden="true">↗</span>
+								</button>
+								<button
+									type="button"
+									className="button button-quiet"
+									onClick={() => navigate('login')}
+								>
+									Acceso de pacientes
+								</button>
+							</div>
+							<div className="hero-trust">
+								<span aria-hidden="true">✳</span> Cuidado dental para toda la familia
+							</div>
+						</div>
+						<div className="hero-photo">
+							<img
+								src="https://images.unsplash.com/photo-1606811971618-4486d14f3f99?auto=format&fit=crop&w=1100&q=85"
+								alt="Profesional de odontología atendiendo a una paciente"
+								fetchPriority="high"
+							/>
+						</div>
+					</section>
+				)}
+				{view === 'nosotros' && (
+					<section className="info-section about-section" id="nosotros">
+						<div className="section-photo">
+							<img
+								src="https://images.unsplash.com/photo-1609840114035-3c981b782dfe?auto=format&fit=crop&w=1000&q=85"
+								alt="Atención dental en un consultorio"
+								loading="lazy"
+							/>
+						</div>
+						<div className="section-copy">
+							<p className="eyebrow">Nosotros</p>
+							<h1>Tu salud bucal, con atención cercana.</h1>
+							<p>
+								En Miradent creemos que una buena atención comienza escuchándote. Queremos que
+								comprendas tus opciones y participes en las decisiones sobre tu cuidado dental.
+							</p>
+							<p>
+								La prevención y las revisiones periódicas ayudan a detectar problemas a tiempo. Cada
+								plan de tratamiento debe adaptarse a las necesidades de cada persona y ser evaluado
+								por un profesional.
+							</p>
+							<a
+								className="source-link"
+								href="https://www.who.int/news-room/fact-sheets/detail/oral-health"
+								target="_blank"
+								rel="noreferrer"
+							>
+								Fuente de salud: Organización Mundial de la Salud ↗
+							</a>
+						</div>
+					</section>
+				)}
+				{view === 'servicios' && (
+					<section className="services-section" id="servicios">
+						<div className="services-intro">
+							<p className="eyebrow">Servicios</p>
+							<h1>Atención para cada etapa de tu sonrisa.</h1>
+							<p>
+								Conoce algunas áreas habituales de la atención odontológica. La valoración
+								profesional determina qué cuidado es adecuado en cada caso.
+							</p>
+						</div>
+						<div className="service-feature">
+							<img
+								src="https://images.unsplash.com/photo-1606811841689-23dfddce3e95?auto=format&fit=crop&w=1200&q=85"
+								alt="Odontóloga conversando con una paciente durante una consulta"
+								loading="lazy"
+							/>
+							<div className="service-list">
+								<article>
+									<span>01</span>
+									<div>
+										<h3>Revisión y prevención</h3>
+										<p>
+											Evaluación de la salud bucal, orientación de higiene y seguimiento preventivo.
+										</p>
+									</div>
+								</article>
+								<article>
+									<span>02</span>
+									<div>
+										<h3>Limpieza dental</h3>
+										<p>Atención profesional para ayudar a mantener dientes y encías saludables.</p>
+									</div>
+								</article>
+								<article>
+									<span>03</span>
+									<div>
+										<h3>Odontología restauradora</h3>
+										<p>Valoración y opciones para tratar caries o reparar piezas dentales.</p>
+									</div>
+								</article>
+								<article>
+									<span>04</span>
+									<div>
+										<h3>Estética dental</h3>
+										<p>Consulta sobre alternativas estéticas según tu salud y tus objetivos.</p>
+									</div>
+								</article>
+							</div>
+						</div>
+						<p className="medical-note">
+							Los tratamientos y resultados dependen de una evaluación individual. Esta información
+							es general y no sustituye una consulta odontológica.
+						</p>
+					</section>
+				)}
+				{view === 'contacto' && (
+					<>
 						<section className="appointment-band" id="agenda">
 							<img
 								src="https://images.unsplash.com/photo-1629909613654-28e377c37b09?auto=format&fit=crop&w=1100&q=85"
@@ -426,7 +494,6 @@ export default function AppContent() {
 								</button>
 							</div>
 						</section>
-
 						<section className="contact-section" id="contacto">
 							<div>
 								<p className="eyebrow">Contáctanos</p>
@@ -513,7 +580,7 @@ export default function AppContent() {
 
 				{view === 'registro' && (
 					<RegistroUsuario
-						onRegistered={() => setView('citas')}
+						onRegistered={() => navigate('citas', true)}
 						onLogin={() => navigate('login')}
 					/>
 				)}
